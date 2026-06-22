@@ -70,9 +70,15 @@ function formatDateTime(timestamp: number): string {
 
 function normalizeBoardMode(name: string): BoardMode | null {
   const normalized = name.trim().toLowerCase();
-  if (normalized === "primary" || normalized === "primär" || normalized === "primaer") {
+
+  if (
+    normalized === "primary" ||
+    normalized === "primär" ||
+    normalized === "primaer"
+  ) {
     return "Primary";
   }
+
   if (
     normalized === "secondary" ||
     normalized === "sekundär" ||
@@ -80,6 +86,7 @@ function normalizeBoardMode(name: string): BoardMode | null {
   ) {
     return "Secondary";
   }
+
   return null;
 }
 
@@ -113,6 +120,7 @@ export function ExecutionBoardPage({
 
   const boardRoots = useMemo(() => {
     if (!shift) return [];
+
     return sortActivities(
       shift.shiftActivities.filter((entry) => {
         if (entry.parentIdSnapshot !== null) return false;
@@ -135,7 +143,7 @@ export function ExecutionBoardPage({
   if (!shift) {
     return (
       <>
-        <NavBar active="execution" onDashboardClick={onDashboardClick} />
+        <NavBar active="board" onDashboardClick={onDashboardClick} />
         <main className="main dashboard-layout">
           <article className="card empty">
             Schicht nicht gefunden.
@@ -183,6 +191,7 @@ export function ExecutionBoardPage({
   const handleAddShiftNote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!shiftNote.trim()) return;
+
     const next = addShiftNoteDB(db, shift.id, shiftNote, shiftNoteKind);
     setDB(next);
     setShiftNote("");
@@ -190,7 +199,7 @@ export function ExecutionBoardPage({
 
   return (
     <>
-      <NavBar active="execution" onDashboardClick={onDashboardClick} />
+      <NavBar active="board" onDashboardClick={onDashboardClick} />
 
       <main className={`main dashboard-layout ${theme.pageClass}`}>
         <section className="card" style={theme.accentStyle}>
@@ -236,9 +245,7 @@ export function ExecutionBoardPage({
                   className={selectedMode === mode ? "btn-primary" : "btn-secondary"}
                   onClick={() => setSelectedMode(mode)}
                   disabled={!exists}
-                  style={
-                    selectedMode === mode ? theme.accentStyle : undefined
-                  }
+                  style={selectedMode === mode ? theme.accentStyle : undefined}
                 >
                   {mode}
                 </button>
@@ -332,11 +339,7 @@ export function ExecutionBoardPage({
 
                                     <div
                                       className="row"
-                                      style={{
-                                        gap: 8,
-                                        marginTop: 12,
-                                        flexWrap: "wrap",
-                                      }}
+                                      style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}
                                     >
                                       <button
                                         type="button"
@@ -349,7 +352,9 @@ export function ExecutionBoardPage({
                                       <button
                                         type="button"
                                         className="btn-secondary"
-                                        onClick={() => handleTaskEvent(task.id, "blocked", draft)}
+                                        onClick={() =>
+                                          handleTaskEvent(task.id, "blocked", draft)
+                                        }
                                       >
                                         Blocked
                                       </button>
@@ -357,7 +362,9 @@ export function ExecutionBoardPage({
                                       <button
                                         type="button"
                                         className="btn-secondary"
-                                        onClick={() => handleTaskEvent(task.id, "skipped", draft)}
+                                        onClick={() =>
+                                          handleTaskEvent(task.id, "skipped", draft)
+                                        }
                                       >
                                         Skip
                                       </button>
