@@ -5,6 +5,7 @@ import {
   addTaskEventDB,
   getLatestTaskEvent,
   getTaskEventsForActivity,
+  removeAutoParentDoneEventDB,
 } from "../dbHelpers";
 import { NavBar } from "./NavBar";
 
@@ -16,18 +17,18 @@ type ExecutionBoardPageProps = {
   onDashboardClick: () => void;
 };
 
-const SCHICHT_LABEL: Record<Shift["shiftType"], string> = {
+const SHIFT_LABEL: Record<Shift["shiftType"], string> = {
   Frueh: "Frühschicht",
   Spaet: "Spätschicht",
   Nacht: "Nachtschicht",
 };
 
-const BEREICH_LABEL: Record<BoardMode, string> = {
+const BOARD_LABEL: Record<BoardMode, string> = {
   Primary: "Primär",
   Secondary: "Sekundär",
 };
 
-function formatDatum(iso: string): string {
+function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString("de-DE", {
       weekday: "long",
@@ -40,7 +41,7 @@ function formatDatum(iso: string): string {
   }
 }
 
-function formatZeitstempel(timestamp: number): string {
+function formatTimestamp(timestamp: number): string {
   try {
     return new Date(timestamp).toLocaleString("de-DE", {
       day: "2-digit",
@@ -89,11 +90,31 @@ function normalizeBoardMode(name: string): BoardMode | null {
   return null;
 }
 
+function getBoardTheme(mode: BoardMode): React.CSSProperties {
+  if (mode === "Secondary") {
+    return {
+      ["--context-accent" as string]: "#89D329",
+      ["--context-accent-strong" as string]: "#5FAE1F",
+      ["--context-accent-soft" as string]: "rgba(137, 211, 41, 0.14)",
+      ["--context-accent-border" as string]: "rgba(137, 211, 41, 0.42)",
+      ["--context-accent-shadow" as string]: "rgba(137, 211, 41, 0.22)",
+    };
+  }
+
+  return {
+    ["--context-accent" as string]: "#00BCFF",
+    ["--context-accent-strong" as string]: "#007CC2",
+    ["--context-accent-soft" as string]: "rgba(0, 188, 255, 0.14)",
+    ["--context-accent-border" as string]: "rgba(0, 188, 255, 0.42)",
+    ["--context-accent-shadow" as string]: "rgba(0, 188, 255, 0.22)",
+  };
+}
+
 function sortActivities(items: ShiftActivity[]): ShiftActivity[] {
   return [...items].sort((a, b) => a.sortOrderSnapshot - b.sortOrderSnapshot);
 }
 
-function isAutomaticParentNote(note: string): boolean {
+function isAutoParentDone(note: string): boolean {
   return note === "__AUTO_PARENT_DONE__";
 }
 
@@ -104,7 +125,7 @@ export function ExecutionBoardPage({
   onBackToShifts,
   onDashboardClick,
 }: ExecutionBoardPageProps) {
-  const shift = useMemo<Shift | null>(
+  const shift = useMemo(
     () => db.shifts.find((entry) => entry.id === shiftId) ?? null,
     [db.shifts, shiftId]
   );
@@ -112,49 +133,52 @@ export function ExecutionBoardPage({
   const [selectedMode, setSelectedMode] = useState<BoardMode>("Primary");
   const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
   const [taskNoteDrafts, setTaskNoteDrafts] = useState<Record<number, string>>({});
-  const [shiftNote, setShiftNote] = useState("");
-  const [shiftNoteKind, setShiftNoteKind] = useState<"handover" | "warning" | "info">(
+  const [noteText, setNoteText] = useState("");
+  const [noteKind, setNoteKind] = useState<"handover" | "warning" | "info">(
     "handover"
   );
 
-  const rootAreas = useMemo(() => {
-    if (!shift) return [];
-
-    return sortActivities(
-      shift.shiftActivities.filter((entry) => {
-        if (entry.parentIdSnapshot !== null) return false;
-        return normalizeBoardMode(entry.nameSnapshot) !== null;
-      })
+  if (!shift) {
+    return (
+      <>
+        <NavBar active="board" onDashboardClick={onDashboardClick} />
+        <main className="main dashboard-layout">
+          <article className="card empty">Schicht nicht gefunden.</article>
+        </main>
+      </>
     );
-  }, [shift]);
+  }
+
+  const topLevelParents = useMemo(() => {
+    return sortActivities(
+      shift.shiftActivities.filter((activity) => activity.parentIdSnapshot === null)
+    );
+  }, [shift.shiftActivities]);
 
   useEffect(() => {
-    if (rootAreas.length === 0) return;
+    const availableModes = topLevelParents
+      .map((parent) => normalizeBoardMode(parent.nameSnapshot))
+      .filter((value): value is BoardMode => value !== null);
 
-    const hasSelected = rootAreas.some(
-      (entry) => normalizeBoardMode(entry.nameSnapshot) === selectedMode
-    );
-
-    if (!hasSelected) {
-      const fallback = normalizeBoardMode(rootAreas[0].nameSnapshot);
-      if (fallback) setSelectedMode(fallback);
+    if (!availableModes.includes(selectedMode) && availableModes[0]) {
+      setSelectedMode(availableModes[0]);
     }
-  }, [rootAreas, selectedMode]);
+  }, [topLevelParents, selectedMode]);
 
   const selectedRoot =
-    rootAreas.find(
-      (entry) => normalizeBoardMode(entry.nameSnapshot) === selectedMode
+    topLevelParents.find(
+      (parent) => normalizeBoardMode(parent.nameSnapshot) === selectedMode
     ) ?? null;
 
   const parentGroups = useMemo(() => {
-    if (!shift || !selectedRoot) return [];
+    if (!selectedRoot) return [];
 
     return sortActivities(
       shift.shiftActivities.filter(
-        (entry) => entry.parentIdSnapshot === selectedRoot.id
+        (activity) => activity.parentIdSnapshot === selectedRoot.id
       )
     );
-  }, [shift, selectedRoot]);
+  }, [shift.shiftActivities, selectedRoot]);
 
   useEffect(() => {
     if (parentGroups.length === 0) {
@@ -162,29 +186,26 @@ export function ExecutionBoardPage({
       return;
     }
 
-    const stillExists = parentGroups.some((entry) => entry.id === selectedParentId);
-
-    if (!stillExists) {
+    const exists = parentGroups.some((parent) => parent.id === selectedParentId);
+    if (!exists) {
       setSelectedParentId(parentGroups[0].id);
     }
   }, [parentGroups, selectedParentId]);
 
   const selectedParent =
-    parentGroups.find((entry) => entry.id === selectedParentId) ?? null;
+    parentGroups.find((parent) => parent.id === selectedParentId) ?? null;
 
   const visibleTasks = useMemo(() => {
-    if (!shift || !selectedParent) return [];
+    if (!selectedParent) return [];
 
     return sortActivities(
       shift.shiftActivities.filter(
-        (entry) => entry.parentIdSnapshot === selectedParent.id
+        (activity) => activity.parentIdSnapshot === selectedParent.id
       )
     );
-  }, [shift, selectedParent]);
+  }, [shift.shiftActivities, selectedParent]);
 
-  const latestEventByTaskId = useMemo(() => {
-    if (!shift) return new Map<number, TaskEvent | null>();
-
+  const latestEventByShiftActivityId = useMemo(() => {
     return new Map(
       shift.shiftActivities.map((activity) => [
         activity.id,
@@ -194,210 +215,191 @@ export function ExecutionBoardPage({
   }, [shift]);
 
   useEffect(() => {
-    setTaskNoteDrafts((current) => {
-      const next = { ...current };
+    setTaskNoteDrafts((prev) => {
+      const next = { ...prev };
 
       for (const task of visibleTasks) {
-        const latest = latestEventByTaskId.get(task.id);
+        const latest = latestEventByShiftActivityId.get(task.id);
         next[task.id] =
-          current[task.id] ??
-          (latest && !isAutomaticParentNote(latest.note) ? latest.note : "");
+          prev[task.id] ??
+          (latest && !isAutoParentDone(latest.note) ? latest.note : "");
       }
 
       return next;
     });
-  }, [visibleTasks, latestEventByTaskId]);
+  }, [visibleTasks, latestEventByShiftActivityId]);
 
   useEffect(() => {
-    if (!shift || !selectedParent) return;
-    if (!selectedParent.nameSnapshot.match(/^MO Start$|^MO Ende$/i)) return;
+    if (!selectedParent) return;
+    if (!/^MO Start$|^MO Ende$/i.test(selectedParent.nameSnapshot)) return;
     if (visibleTasks.length === 0) return;
 
-    const latestParentEvent = getLatestTaskEvent(shift, selectedParent.id);
     const allDone = visibleTasks.every(
-      (task) => latestEventByTaskId.get(task.id)?.status === "done"
+      (task) => latestEventByShiftActivityId.get(task.id)?.status === "done"
     );
 
-    if (allDone) {
-      const parentAlreadyAutoDone =
-        latestParentEvent?.status === "done" &&
-        isAutomaticParentNote(latestParentEvent.note);
+    const latestParentEvent = getLatestTaskEvent(shift, selectedParent.id);
 
-      if (!parentAlreadyAutoDone) {
-        const next = addTaskEventDB(
-          db,
-          shift.id,
-          selectedParent.id,
-          "done",
-          "__AUTO_PARENT_DONE__"
+    if (allDone) {
+      const alreadyAutoDone =
+        latestParentEvent?.status === "done" &&
+        isAutoParentDone(latestParentEvent.note);
+
+      if (!alreadyAutoDone) {
+        setDB(
+          addTaskEventDB(
+            db,
+            shift.id,
+            selectedParent.id,
+            "done",
+            "__AUTO_PARENT_DONE__"
+          )
         );
-        setDB(next);
       }
 
       return;
     }
 
-    const hasAutoDoneEvent = shift.taskEvents.some(
+    const hasAutoDone = shift.taskEvents.some(
       (event) =>
         event.shiftActivityId === selectedParent.id &&
         event.status === "done" &&
-        isAutomaticParentNote(event.note)
+        isAutoParentDone(event.note)
     );
 
-    if (hasAutoDoneEvent) {
-      const next: DB = {
-        ...db,
-        shifts: db.shifts.map((entry) =>
-          entry.id === shift.id
-            ? {
-                ...entry,
-                taskEvents: entry.taskEvents.filter(
-                  (event) =>
-                    !(
-                      event.shiftActivityId === selectedParent.id &&
-                      event.status === "done" &&
-                      isAutomaticParentNote(event.note)
-                    )
-                ),
-              }
-            : entry
-        ),
-      };
-
-      setDB(next);
+    if (hasAutoDone) {
+      setDB(removeAutoParentDoneEventDB(db, shift.id, selectedParent.id));
     }
-  }, [db, setDB, shift, selectedParent, visibleTasks, latestEventByTaskId]);
+  }, [db, setDB, selectedParent, shift, visibleTasks, latestEventByShiftActivityId]);
 
-  if (!shift) {
-    return (
-      <>
-        <NavBar active="board" onDashboardClick={onDashboardClick} />
-        <main className="main dashboard-layout">
-          <article className="card empty">
-            Schicht nicht gefunden.
-          </article>
-        </main>
-      </>
-    );
-  }
+  const dateLabel = formatDate(shift.date);
+  const boardThemeStyle = getBoardTheme(selectedMode);
 
-  const datumLabel = formatDatum(shift.date);
-
-  const leafTaskIds = new Set(
+  const parentIds = new Set(
     shift.shiftActivities
-      .map((entry) => entry.parentIdSnapshot)
+      .map((activity) => activity.parentIdSnapshot)
       .filter((value): value is number => value !== null)
   );
 
   const totalLeafTasks = shift.shiftActivities.filter(
-    (entry) => !leafTaskIds.has(entry.id)
+    (activity) => !parentIds.has(activity.id)
   ).length;
 
   const latestEvents = shift.shiftActivities
-    .map((entry) => getLatestTaskEvent(shift, entry.id))
-    .filter((entry): entry is TaskEvent => entry !== null);
+    .map((activity) => getLatestTaskEvent(shift, activity.id))
+    .filter((event): event is TaskEvent => event !== null);
 
-  const erledigtCount = latestEvents.filter((entry) => entry.status === "done").length;
-  const blockiertCount = latestEvents.filter(
-    (entry) => entry.status === "blocked"
+  const doneCount = latestEvents.filter((event) => event.status === "done").length;
+  const blockedCount = latestEvents.filter(
+    (event) => event.status === "blocked"
   ).length;
-  const uebersprungenCount = latestEvents.filter(
-    (entry) => entry.status === "skipped"
+  const skippedCount = latestEvents.filter(
+    (event) => event.status === "skipped"
   ).length;
-
-  const offeneCount = Math.max(
-    totalLeafTasks - erledigtCount - blockiertCount - uebersprungenCount,
+  const openCount = Math.max(
+    totalLeafTasks - doneCount - blockedCount - skippedCount,
     0
   );
 
-  const gruppenErledigt = visibleTasks.filter(
-    (task) => latestEventByTaskId.get(task.id)?.status === "done"
-  ).length;
+  const selectedParentStats = useMemo(() => {
+    const total = visibleTasks.length;
+    const done = visibleTasks.filter(
+      (task) => latestEventByShiftActivityId.get(task.id)?.status === "done"
+    ).length;
+    const blocked = visibleTasks.filter(
+      (task) => latestEventByShiftActivityId.get(task.id)?.status === "blocked"
+    ).length;
+    const skipped = visibleTasks.filter(
+      (task) => latestEventByShiftActivityId.get(task.id)?.status === "skipped"
+    ).length;
+    const open = Math.max(total - done - blocked - skipped, 0);
+    const percent = total > 0 ? Math.round((done / total) * 100) : 0;
 
-  const gruppenFortschritt =
-    visibleTasks.length > 0
-      ? Math.round((gruppenErledigt / visibleTasks.length) * 100)
-      : 0;
+    return { total, done, blocked, skipped, open, percent };
+  }, [visibleTasks, latestEventByShiftActivityId]);
 
-  const saveStatus = (task: ShiftActivity, status: TaskEvent["status"]) => {
-    const note = (taskNoteDrafts[task.id] ?? "").trim();
-    const next = addTaskEventDB(db, shift.id, task.id, status, note);
-    setDB(next);
+  const saveStatus = (activity: ShiftActivity, status: TaskEvent["status"]) => {
+    const note = (taskNoteDrafts[activity.id] ?? "").trim();
+    setDB(addTaskEventDB(db, shift.id, activity.id, status, note));
   };
 
-  const saveShiftNote = (e: React.FormEvent) => {
+  const addShiftNote = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shiftNote.trim()) return;
-
-    const next = addShiftNoteDB(db, shift.id, shiftNote, shiftNoteKind);
-    setDB(next);
-    setShiftNote("");
+    const next = addShiftNoteDB(db, shift.id, noteText, noteKind);
+    if (next !== db) {
+      setDB(next);
+      setNoteText("");
+    }
   };
 
   return (
     <>
       <NavBar active="board" onDashboardClick={onDashboardClick} />
 
-      <main className="main dashboard-layout">
-        <section className="card">
+      <main className="main dashboard-layout" style={boardThemeStyle}>
+        <section className="card contextual-card">
           <div className="row">
             <div>
               <h1 className="card-title">Ausführungsboard</h1>
               <p className="card-subtitle">
-                {SCHICHT_LABEL[shift.shiftType]} · {datumLabel} · CWID {shift.operator} ·{" "}
+                {SHIFT_LABEL[shift.shiftType]} · {dateLabel} · CWID {shift.operator} ·{" "}
                 {shift.line}
               </p>
             </div>
 
             <div className="spacer" />
 
-            <button type="button" className="btn-ghost" onClick={onBackToShifts}>
+            <button
+              type="button"
+              className="btn-ghost contextual-ghost-btn"
+              onClick={onBackToShifts}
+            >
               ← Zurück zu Schichten
             </button>
           </div>
         </section>
 
         <section className="grid grid-3">
-          <article className="kpi-card">
+          <article className="kpi-card contextual-card">
             <div className="kpi-label">Gesamtaufgaben</div>
             <div className="kpi-value">{totalLeafTasks}</div>
           </article>
 
-          <article className="kpi-card">
+          <article className="kpi-card contextual-card">
             <div className="kpi-label">Erledigt</div>
-            <div className="kpi-value">{erledigtCount}</div>
+            <div className="kpi-value">{doneCount}</div>
           </article>
 
-          <article className="kpi-card">
+          <article className="kpi-card contextual-card">
             <div className="kpi-label">Offen / Blockiert / Übersprungen</div>
             <div className="kpi-value">
-              {offeneCount} / {blockiertCount} / {uebersprungenCount}
+              {openCount} / {blockedCount} / {skippedCount}
             </div>
           </article>
         </section>
 
         <section className="dashboard-grid">
-          <article className="card">
+          <article className="card contextual-card">
             <h2 className="card-title">Bereiche</h2>
-            <p className="card-subtitle">
-              Wähle zwischen Primär und Sekundär.
-            </p>
+            <p className="card-subtitle">Wähle Primär oder Sekundär.</p>
 
             <div className="parent-list">
               {(["Primary", "Secondary"] as BoardMode[]).map((mode) => {
-                const exists = rootAreas.some(
-                  (entry) => normalizeBoardMode(entry.nameSnapshot) === mode
+                const exists = topLevelParents.some(
+                  (parent) => normalizeBoardMode(parent.nameSnapshot) === mode
                 );
 
                 return (
                   <button
                     key={mode}
                     type="button"
-                    className={`parent-pill ${selectedMode === mode ? "parent-pill--active" : ""}`}
+                    className={`parent-pill contextual-pill ${
+                      selectedMode === mode ? "parent-pill--active" : ""
+                    }`}
                     onClick={() => setSelectedMode(mode)}
                     disabled={!exists}
                   >
-                    {BEREICH_LABEL[mode]}
+                    {BOARD_LABEL[mode]}
                   </button>
                 );
               })}
@@ -405,24 +407,26 @@ export function ExecutionBoardPage({
 
             <div style={{ marginTop: 18 }}>
               <h3 className="card-title" style={{ fontSize: 16 }}>
-                MO-Bereiche
+                Elternpunkte
               </h3>
               <p className="card-subtitle">
-                Wähle einen Elternpunkt wie MO Start oder MO Ende.
+                Wähle MO Start oder MO Ende.
               </p>
 
               {parentGroups.length === 0 ? (
-                <div className="card empty">Keine Bereiche gefunden.</div>
+                <div className="card empty">Keine Elternpunkte gefunden.</div>
               ) : (
                 <div className="parent-list">
                   {parentGroups.map((parent) => {
-                    const latest = latestEventByTaskId.get(parent.id);
+                    const latest = latestEventByShiftActivityId.get(parent.id);
 
                     return (
                       <button
                         key={parent.id}
                         type="button"
-                        className={`parent-pill ${selectedParentId === parent.id ? "parent-pill--active" : ""}`}
+                        className={`parent-pill contextual-child-pill ${
+                          selectedParentId === parent.id ? "parent-pill--active" : ""
+                        }`}
                         onClick={() => setSelectedParentId(parent.id)}
                       >
                         {parent.nameSnapshot}
@@ -435,7 +439,7 @@ export function ExecutionBoardPage({
             </div>
           </article>
 
-          <article className="card">
+          <article className="card contextual-card">
             <h2 className="card-title">
               {selectedParent ? selectedParent.nameSnapshot : "Aufgaben"}
             </h2>
@@ -446,19 +450,26 @@ export function ExecutionBoardPage({
             </p>
 
             {selectedParent ? (
-              <div className="task-progress-card">
+              <div className="task-progress-card contextual-surface">
                 <div className="task-progress-head">
                   <span className="task-progress-title">Fortschritt</span>
                   <span className="task-progress-value">
-                    {gruppenErledigt} / {visibleTasks.length} erledigt ({gruppenFortschritt}%)
+                    {selectedParentStats.done} / {selectedParentStats.total} erledigt (
+                    {selectedParentStats.percent}%)
                   </span>
                 </div>
 
                 <div className="task-progress-bar">
                   <div
                     className="task-progress-bar-fill"
-                    style={{ width: `${gruppenFortschritt}%` }}
+                    style={{ width: `${selectedParentStats.percent}%` }}
                   />
+                </div>
+
+                <div className="task-progress-meta">
+                  <span>Offen: {selectedParentStats.open}</span>
+                  <span>Blockiert: {selectedParentStats.blocked}</span>
+                  <span>Übersprungen: {selectedParentStats.skipped}</span>
                 </div>
               </div>
             ) : null}
@@ -472,11 +483,14 @@ export function ExecutionBoardPage({
             ) : (
               <div className="shift-list">
                 {visibleTasks.map((task) => {
-                  const latest = latestEventByTaskId.get(task.id);
+                  const latest = latestEventByShiftActivityId.get(task.id);
                   const history = getTaskEventsForActivity(shift, task.id);
 
                   return (
-                    <div key={task.id} className="shift-card task-card">
+                    <div
+                      key={task.id}
+                      className="shift-card task-card contextual-task-card"
+                    >
                       <div className="shift-meta task-meta">
                         <div className="task-topline">
                           <div className="shift-date">{task.nameSnapshot}</div>
@@ -492,14 +506,16 @@ export function ExecutionBoardPage({
 
                         <div className="shift-sub">
                           {latest
-                            ? `Letzter Zeitstempel: ${formatZeitstempel(latest.timestamp)}`
+                            ? `Letzter Zeitstempel: ${formatTimestamp(latest.timestamp)}`
                             : "Noch kein Zeitstempel"}
                         </div>
 
                         <div className="task-actions">
                           <button
                             type="button"
-                            className="btn-primary task-status-btn"
+                            className={`btn-primary task-status-btn ${
+                              latest?.status === "done" ? "is-active" : ""
+                            }`}
                             onClick={() => saveStatus(task, "done")}
                           >
                             Erledigt
@@ -507,7 +523,9 @@ export function ExecutionBoardPage({
 
                           <button
                             type="button"
-                            className="btn-ghost task-status-btn"
+                            className={`btn-ghost task-status-btn ${
+                              latest?.status === "blocked" ? "is-active is-blocked" : ""
+                            }`}
                             onClick={() => saveStatus(task, "blocked")}
                           >
                             Blockiert
@@ -515,7 +533,9 @@ export function ExecutionBoardPage({
 
                           <button
                             type="button"
-                            className="btn-ghost task-status-btn"
+                            className={`btn-ghost task-status-btn ${
+                              latest?.status === "skipped" ? "is-active is-skipped" : ""
+                            }`}
                             onClick={() => saveStatus(task, "skipped")}
                           >
                             Übersprungen
@@ -529,7 +549,7 @@ export function ExecutionBoardPage({
 
                           <textarea
                             id={`task-note-${task.id}`}
-                            className="input textarea task-note-textarea"
+                            className="input textarea task-note-textarea contextual-input"
                             rows={3}
                             value={taskNoteDrafts[task.id] ?? ""}
                             onChange={(event) =>
@@ -543,14 +563,13 @@ export function ExecutionBoardPage({
                         </div>
 
                         {history.length > 0 ? (
-                          <div className="task-note-preview">
+                          <div className="task-note-preview contextual-surface">
                             <strong>Historie:</strong>
                             <div style={{ marginTop: 8 }}>
                               {history.map((event) => (
                                 <div key={event.id} className="shift-sub">
-                                  {statusLabel(event.status)} ·{" "}
-                                  {formatZeitstempel(event.timestamp)}
-                                  {event.note && !isAutomaticParentNote(event.note)
+                                  {statusLabel(event.status)} · {formatTimestamp(event.timestamp)}
+                                  {event.note && !isAutoParentDone(event.note)
                                     ? ` · ${event.note}`
                                     : ""}
                                 </div>
@@ -567,13 +586,13 @@ export function ExecutionBoardPage({
           </article>
         </section>
 
-        <section className="card">
+        <section className="card contextual-card">
           <h2 className="card-title">Übergabe & Meldungen</h2>
           <p className="card-subtitle">
             Hinweise für die nächste Schicht, Warnungen oder allgemeine Infos.
           </p>
 
-          <form onSubmit={saveShiftNote}>
+          <form onSubmit={addShiftNote}>
             <div className="field">
               <label className="label" htmlFor="shift-note-kind">
                 Typ
@@ -581,12 +600,10 @@ export function ExecutionBoardPage({
 
               <select
                 id="shift-note-kind"
-                className="select"
-                value={shiftNoteKind}
+                className="select contextual-input"
+                value={noteKind}
                 onChange={(event) =>
-                  setShiftNoteKind(
-                    event.target.value as "handover" | "warning" | "info"
-                  )
+                  setNoteKind(event.target.value as "handover" | "warning" | "info")
                 }
               >
                 <option value="handover">Übergabe</option>
@@ -602,9 +619,9 @@ export function ExecutionBoardPage({
 
               <textarea
                 id="shift-note"
-                className="input textarea"
-                value={shiftNote}
-                onChange={(event) => setShiftNote(event.target.value)}
+                className="input textarea contextual-input"
+                value={noteText}
+                onChange={(event) => setNoteText(event.target.value)}
                 rows={4}
                 placeholder="Zum Beispiel: Material knapp, Linie wartet auf Freigabe ..."
               />
@@ -640,7 +657,7 @@ export function ExecutionBoardPage({
                       </div>
 
                       <div className="shift-sub">
-                        {formatZeitstempel(note.createdAt)}
+                        {formatTimestamp(note.createdAt)}
                       </div>
 
                       <div className="shift-sub">{note.text}</div>
