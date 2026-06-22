@@ -71,7 +71,6 @@ export function resetDB(): DB {
 
 function migrateDB(input: unknown): DB {
   const raw = (input ?? {}) as {
-    version?: unknown;
     nextId?: unknown;
     activities?: unknown;
     shifts?: unknown;
