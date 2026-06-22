@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://bayerali.github.io/22.06/",
+  "homepage": "https://bayerali.github.io/2306/",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
