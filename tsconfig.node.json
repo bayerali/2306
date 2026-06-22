@@ -6,8 +6,11 @@
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "Bundler",
-    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
     "noEmit": true
   },
-  "include": ["vite.config.*"]
+  "include": ["vite.config.js"]
 }
