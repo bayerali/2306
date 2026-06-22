@@ -132,7 +132,7 @@ export function ShiftsPage({
     next.shifts = [shift, ...next.shifts];
     setDB(next);
     setOperator("");
-    onOpenShiftBoard(id);
+    setFormError("");
   };
 
   const deleteShift = (id: number, e: React.MouseEvent) => {
@@ -174,7 +174,8 @@ export function ShiftsPage({
           <article className="card">
             <h1 className="card-title">Neue Schicht starten</h1>
             <p className="card-subtitle">
-              Erstelle eine neue Schicht und öffne direkt das Ausführungsboard.
+              Erstelle eine neue Schicht. Die Schicht bleibt nach dem Anlegen in
+              der Übersicht und kann rechts geöffnet werden.
             </p>
 
             <form className="new-shift-form" onSubmit={startShift}>
@@ -247,7 +248,7 @@ export function ShiftsPage({
 
               <div className="new-shift-actions">
                 <button type="submit" className="btn-primary start-btn">
-                  Schicht starten →
+                  Schicht starten
                 </button>
               </div>
             </form>
