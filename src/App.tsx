@@ -29,7 +29,6 @@ function useHashRoute(): Route {
   useEffect(() => {
     const onChange = () => setRoute(parseHash(window.location.hash));
     window.addEventListener("hashchange", onChange);
-
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
 
