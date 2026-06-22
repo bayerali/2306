@@ -3,7 +3,6 @@ import { loadDB, saveDB } from "./storage";
 import type { DB } from "./types";
 import { ShiftsPage } from "./components/ShiftsPage";
 import { ExecutionBoardPage } from "./components/ExecutionBoardPage";
-import { clearCompletionDB, setCompletionStatusDB } from "./dbHelpers";
 
 type Route =
   | { kind: "dashboard" }
@@ -50,24 +49,6 @@ export default function App() {
     saveDB(next);
   };
 
-  const completeActivity = (shiftId: number, shiftActivityId: number) => {
-    const shift = db.shifts.find((entry) => entry.id === shiftId);
-    if (!shift) return;
-
-    const activity = shift.shiftActivities.find(
-      (entry) => entry.id === shiftActivityId
-    );
-    if (!activity) return;
-
-    const next = setCompletionStatusDB(db, shiftId, activity, "done");
-    setDB(next);
-  };
-
-  const undoCompleteActivity = (shiftId: number, shiftActivityId: number) => {
-    const next = clearCompletionDB(db, shiftId, shiftActivityId);
-    setDB(next);
-  };
-
   if (route.kind === "shift") {
     const shift = db.shifts.find((entry) => entry.id === route.shiftId);
 
@@ -80,10 +61,9 @@ export default function App() {
       <ExecutionBoardPage
         db={db}
         setDB={setDB}
-        shift={shift}
-        onBack={() => navigate("/")}
-        onCompleteActivity={completeActivity}
-        onUndoCompleteActivity={undoCompleteActivity}
+        shiftId={route.shiftId}
+        onBackToShifts={() => navigate("/")}
+        onDashboardClick={() => navigate("/")}
       />
     );
   }
