@@ -125,7 +125,7 @@ export function ShiftsPage({
       operator: op,
       createdAt: Date.now(),
       shiftActivities,
-      completions: [],
+      taskEvents: [],
       notes: [],
     };
 
