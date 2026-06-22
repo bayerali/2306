@@ -60,13 +60,8 @@ export function saveDB(db: DB): void {
   }
 }
 
-/**
- * Return the next free id *without* mutating the DB.
- * All mutation of nextId is done inside migrateDB and dbHelpers.
- */
 export function newId(db: DB): number {
-  const id = db.nextId ?? 1;
-  return id;
+  return db.nextId ?? 1;
 }
 
 export function resetDB(): DB {
@@ -121,7 +116,10 @@ function migrateDB(input: unknown): DB {
         operator: String(shift.operator ?? ""),
         createdAt: Number(shift.createdAt ?? Date.now()),
         shiftActivities: migrateShiftActivities(shift.shiftActivities),
-        taskEvents: migrateTaskEvents(shift.taskEvents, shift.completions),
+        taskEvents: migrateTaskEvents(
+          (shift as Partial<Shift>).taskEvents,
+          shift.completions
+        ),
         notes: migrateNotes(shift.notes),
       }))
     : [];
@@ -172,10 +170,7 @@ function migrateTaskEvents(
 ): TaskEvent[] {
   if (Array.isArray(taskEventsInput)) {
     return taskEventsInput.map((item, index) => {
-      const event = item as Partial<TaskEvent> & {
-        status?: unknown;
-        note?: unknown;
-      };
+      const event = item as Partial<TaskEvent>;
 
       return {
         id: Number(event.id ?? index + 1),
