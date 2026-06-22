@@ -14,6 +14,8 @@ export type CompletionStatus = "done" | "blocked" | "skipped";
 
 export type ShiftNoteKind = "handover" | "warning" | "info";
 
+export type BoardMode = "Primary" | "Secondary";
+
 export interface Activity {
   id: number;
   name: string;
@@ -32,7 +34,7 @@ export interface ShiftActivity {
   sortOrderSnapshot: number;
 }
 
-export interface Completion {
+export interface TaskEvent {
   id: number;
   shiftActivityId: number;
   status: CompletionStatus;
@@ -56,12 +58,12 @@ export interface Shift {
   operator: string;
   createdAt: number;
   shiftActivities: ShiftActivity[];
-  completions: Completion[];
+  taskEvents: TaskEvent[];
   notes: ShiftNote[];
 }
 
 export interface DB {
-  version: 2;
+  version: 3;
   nextId: number;
   activities: Activity[];
   shifts: Shift[];
