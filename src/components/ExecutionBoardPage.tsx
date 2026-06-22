@@ -1,713 +1,486 @@
-import React, { useEffect, useMemo, useState } from "react";
-import type { CompletionStatus, DB, Shift, ShiftActivity } from "../types";
-import { NavBar } from "./NavBar";
+import React, { useMemo, useState } from "react";
+import type {
+  BoardMode,
+  DB,
+  Shift,
+  ShiftActivity,
+  TaskEvent,
+} from "../types";
 import {
-  addChildActivityForShiftDB,
   addShiftNoteDB,
-  setCompletionNoteDB,
-  setCompletionStatusDB,
+  addTaskEventDB,
+  getLatestTaskEvent,
+  getTaskEventsForActivity,
 } from "../dbHelpers";
+import { NavBar } from "./NavBar";
 
-const SHIFT_LABEL: Record<Shift["shiftType"], string> = {
-  Frueh: "Frühschicht",
-  Spaet: "Spätschicht",
-  Nacht: "Nachtschicht",
-};
-
-type ExecutionBoardPageProps = {
+export interface ExecutionBoardPageProps {
   db: DB;
   setDB: (db: DB) => void;
-  shift: Shift;
-  onBack: () => void;
-  onCompleteActivity: (shiftId: number, shiftActivityId: number) => void;
-  onUndoCompleteActivity: (shiftId: number, shiftActivityId: number) => void;
+  shiftId: number;
+  onBackToShifts: () => void;
+  onDashboardClick: () => void;
+}
+
+type ThemeConfig = {
+  pageClass: string;
+  badgeClass: string;
+  accentStyle: React.CSSProperties;
+  softStyle: React.CSSProperties;
 };
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("de-DE", {
-      weekday: "long",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  } catch {
-    return iso;
-  }
+const THEMES: Record<BoardMode, ThemeConfig> = {
+  Primary: {
+    pageClass: "execution-theme-primary",
+    badgeClass: "theme-badge-primary",
+    accentStyle: {
+      background: "linear-gradient(135deg, #0b3a82, #00bcff)",
+      color: "#ffffff",
+    },
+    softStyle: {
+      background: "rgba(11, 58, 130, 0.08)",
+      border: "1px solid rgba(11, 58, 130, 0.18)",
+      color: "#0b3a82",
+    },
+  },
+  Secondary: {
+    pageClass: "execution-theme-secondary",
+    badgeClass: "theme-badge-secondary",
+    accentStyle: {
+      background: "linear-gradient(135deg, #4c9c2e, #89d329)",
+      color: "#ffffff",
+    },
+    softStyle: {
+      background: "rgba(76, 156, 46, 0.10)",
+      border: "1px solid rgba(76, 156, 46, 0.22)",
+      color: "#2e6d1d",
+    },
+  },
+};
+
+function formatDateTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
-function formatTimestamp(timestamp: number): string {
-  try {
-    return new Date(timestamp).toLocaleString("de-DE", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return String(timestamp);
+function normalizeBoardMode(name: string): BoardMode | null {
+  const normalized = name.trim().toLowerCase();
+  if (normalized === "primary" || normalized === "primär" || normalized === "primaer") {
+    return "Primary";
   }
+  if (
+    normalized === "secondary" ||
+    normalized === "sekundär" ||
+    normalized === "sekundaer"
+  ) {
+    return "Secondary";
+  }
+  return null;
 }
 
-function statusLabel(status: CompletionStatus): string {
-  switch (status) {
-    case "done":
-      return "Erledigt";
-    case "blocked":
-      return "Blockiert";
-    case "skipped":
-      return "Übersprungen";
-    default:
-      return status;
-  }
+function sortActivities(items: ShiftActivity[]): ShiftActivity[] {
+  return [...items].sort((a, b) => a.sortOrderSnapshot - b.sortOrderSnapshot);
 }
 
-function getParentTheme(parentName?: string): React.CSSProperties {
-  if (parentName === "Sekundär") {
-    return {
-      ["--context-accent" as string]: "#89D329",
-      ["--context-accent-strong" as string]: "#5FAE1F",
-      ["--context-accent-soft" as string]: "rgba(137, 211, 41, 0.14)",
-      ["--context-accent-border" as string]: "rgba(137, 211, 41, 0.42)",
-      ["--context-accent-shadow" as string]: "rgba(137, 211, 41, 0.22)",
-    };
-  }
+function statusLabel(status: TaskEvent["status"]): string {
+  if (status === "done") return "Erledigt";
+  if (status === "blocked") return "Blockiert";
+  return "Übersprungen";
+}
 
-  return {
-    ["--context-accent" as string]: "#00BCFF",
-    ["--context-accent-strong" as string]: "#007CC2",
-    ["--context-accent-soft" as string]: "rgba(0, 188, 255, 0.14)",
-    ["--context-accent-border" as string]: "rgba(0, 188, 255, 0.42)",
-    ["--context-accent-shadow" as string]: "rgba(0, 188, 255, 0.22)",
-  };
+function statusClass(status: TaskEvent["status"]): string {
+  if (status === "done") return "status-done";
+  if (status === "blocked") return "status-blocked";
+  return "status-skipped";
 }
 
 export function ExecutionBoardPage({
   db,
   setDB,
-  shift,
-  onBack,
-  onCompleteActivity,
-  onUndoCompleteActivity,
+  shiftId,
+  onBackToShifts,
+  onDashboardClick,
 }: ExecutionBoardPageProps) {
-  const dateLabel = formatDate(shift.date);
+  const shift = useMemo<Shift | null>(
+    () => db.shifts.find((entry) => entry.id === shiftId) ?? null,
+    [db.shifts, shiftId]
+  );
 
-  const topLevelParents = useMemo(() => {
-    return shift.shiftActivities
-      .filter((activity) => activity.parentIdSnapshot === null)
-      .sort((a, b) => a.sortOrderSnapshot - b.sortOrderSnapshot);
-  }, [shift.shiftActivities]);
+  const boardRoots = useMemo(() => {
+    if (!shift) return [];
+    return sortActivities(
+      shift.shiftActivities.filter((entry) => {
+        if (entry.parentIdSnapshot !== null) return false;
+        return normalizeBoardMode(entry.nameSnapshot) !== null;
+      })
+    );
+  }, [shift]);
 
-  const [selectedParentId, setSelectedParentId] = useState<number | null>(() => {
-    return topLevelParents[0]?.id ?? null;
+  const [selectedMode, setSelectedMode] = useState<BoardMode>(() => {
+    const first = boardRoots[0];
+    return first ? normalizeBoardMode(first.nameSnapshot) ?? "Primary" : "Primary";
   });
 
-  const [selectedChildId, setSelectedChildId] = useState<number | null>(null);
-  const [noteText, setNoteText] = useState("");
-  const [newChildName, setNewChildName] = useState("");
-  const [newTaskName, setNewTaskName] = useState("");
-  const [taskNoteDrafts, setTaskNoteDrafts] = useState<Record<number, string>>(
-    {}
+  const [noteDrafts, setNoteDrafts] = useState<Record<number, string>>({});
+  const [shiftNote, setShiftNote] = useState("");
+  const [shiftNoteKind, setShiftNoteKind] = useState<"handover" | "warning" | "info">(
+    "handover"
   );
 
-  const firstLevelChildren = useMemo(() => {
-    if (selectedParentId === null) return [];
+  if (!shift) {
+    return (
+      <>
+        <NavBar active="execution" onDashboardClick={onDashboardClick} />
+        <main className="main dashboard-layout">
+          <article className="card empty">
+            Schicht nicht gefunden.
+            <div style={{ marginTop: 16 }}>
+              <button type="button" className="btn-primary" onClick={onBackToShifts}>
+                Zurück zu Schichten
+              </button>
+            </div>
+          </article>
+        </main>
+      </>
+    );
+  }
 
-    return shift.shiftActivities
-      .filter((activity) => activity.parentIdSnapshot === selectedParentId)
-      .sort((a, b) => a.sortOrderSnapshot - b.sortOrderSnapshot);
-  }, [shift.shiftActivities, selectedParentId]);
+  const selectedRoot =
+    boardRoots.find(
+      (entry) => normalizeBoardMode(entry.nameSnapshot) === selectedMode
+    ) ?? boardRoots[0] ?? null;
 
-  useEffect(() => {
-    if (firstLevelChildren.length === 0) {
-      setSelectedChildId(null);
-      return;
-    }
+  const theme = THEMES[selectedMode];
 
-    const stillValid = firstLevelChildren.some(
-      (child) => child.id === selectedChildId
+  const levelTwoGroups = selectedRoot
+    ? sortActivities(
+        shift.shiftActivities.filter(
+          (entry) => entry.parentIdSnapshot === selectedRoot.id
+        )
+      )
+    : [];
+
+  const getChildren = (parentId: number) =>
+    sortActivities(
+      shift.shiftActivities.filter((entry) => entry.parentIdSnapshot === parentId)
     );
 
-    if (!stillValid) {
-      setSelectedChildId(firstLevelChildren[0].id);
-    }
-  }, [firstLevelChildren, selectedChildId]);
-
-  const visibleTasks = useMemo(() => {
-    if (selectedChildId === null) return [];
-
-    return shift.shiftActivities
-      .filter((activity) => activity.parentIdSnapshot === selectedChildId)
-      .sort((a, b) => a.sortOrderSnapshot - b.sortOrderSnapshot);
-  }, [shift.shiftActivities, selectedChildId]);
-
-  const completionsByShiftActivityId = useMemo(() => {
-    return new Map(
-      shift.completions.map((completion) => [completion.shiftActivityId, completion])
-    );
-  }, [shift.completions]);
-
-  useEffect(() => {
-    setTaskNoteDrafts((prev) => {
-      const next = { ...prev };
-
-      for (const task of visibleTasks) {
-        next[task.id] = prev[task.id] ?? completionsByShiftActivityId.get(task.id)?.note ?? "";
-      }
-
-      return next;
-    });
-  }, [visibleTasks, completionsByShiftActivityId]);
-
-  const selectedParent =
-    topLevelParents.find((parent) => parent.id === selectedParentId) ?? null;
-
-  const selectedChild =
-    firstLevelChildren.find((child) => child.id === selectedChildId) ?? null;
-
-  const parentThemeStyle = useMemo(
-    () => getParentTheme(selectedParent?.nameSnapshot),
-    [selectedParent]
-  );
-
-  const totalLeafTasks = useMemo(() => {
-    const parentIds = new Set(
-      shift.shiftActivities
-        .map((activity) => activity.parentIdSnapshot)
-        .filter((value): value is number => value !== null)
-    );
-
-    return shift.shiftActivities.filter((activity) => !parentIds.has(activity.id))
-      .length;
-  }, [shift.shiftActivities]);
-
-  const doneCount = shift.completions.filter(
-    (completion) => completion.status === "done"
-  ).length;
-  const blockedCount = shift.completions.filter(
-    (completion) => completion.status === "blocked"
-  ).length;
-  const skippedCount = shift.completions.filter(
-    (completion) => completion.status === "skipped"
-  ).length;
-
-  const selectedChildStats = useMemo(() => {
-    const total = visibleTasks.length;
-    const done = visibleTasks.filter(
-      (task) => completionsByShiftActivityId.get(task.id)?.status === "done"
-    ).length;
-    const blocked = visibleTasks.filter(
-      (task) => completionsByShiftActivityId.get(task.id)?.status === "blocked"
-    ).length;
-    const skipped = visibleTasks.filter(
-      (task) => completionsByShiftActivityId.get(task.id)?.status === "skipped"
-    ).length;
-    const open = Math.max(total - done - blocked - skipped, 0);
-    const percent = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    return { total, done, blocked, skipped, open, percent };
-  }, [visibleTasks, completionsByShiftActivityId]);
-
-  const saveStatus = (activity: ShiftActivity, status: CompletionStatus) => {
-    const existing = completionsByShiftActivityId.get(activity.id);
-
-    if (existing?.status === status) {
-      onUndoCompleteActivity(shift.id, activity.id);
-      return;
-    }
-
-    const next = setCompletionStatusDB(db, shift.id, activity, status);
+  const handleTaskEvent = (
+    shiftActivityId: number,
+    status: TaskEvent["status"],
+    note = ""
+  ) => {
+    const next = addTaskEventDB(db, shift.id, shiftActivityId, status, note);
     setDB(next);
+    setNoteDrafts((current) => ({ ...current, [shiftActivityId]: "" }));
   };
 
-  const saveTaskNote = (activity: ShiftActivity) => {
-    const draft = taskNoteDrafts[activity.id] ?? "";
-    const next = setCompletionNoteDB(db, shift.id, activity, draft);
+  const handleAddShiftNote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shiftNote.trim()) return;
+    const next = addShiftNoteDB(db, shift.id, shiftNote, shiftNoteKind);
     setDB(next);
-  };
-
-  const clearTaskNote = (activity: ShiftActivity) => {
-    setTaskNoteDrafts((prev) => ({
-      ...prev,
-      [activity.id]: "",
-    }));
-
-    const next = setCompletionNoteDB(db, shift.id, activity, "");
-    setDB(next);
-  };
-
-  const addShiftNote = (kind: Shift["notes"][number]["kind"]) => {
-    const next = addShiftNoteDB(db, shift.id, noteText, kind);
-
-    if (next !== db) {
-      setDB(next);
-      setNoteText("");
-    }
-  };
-
-  const addFirstLevelChild = () => {
-    const label = newChildName.trim();
-    if (!label || !selectedParent) return;
-
-    const { db: next, newShiftActivity } = addChildActivityForShiftDB({
-      db,
-      shiftId: shift.id,
-      parentActivityId: selectedParent.activityId,
-      label,
-    });
-
-    if (!newShiftActivity) return;
-
-    setDB(next);
-    setNewChildName("");
-    setSelectedChildId(newShiftActivity.id);
-  };
-
-  const addSecondLevelTask = () => {
-    const label = newTaskName.trim();
-    if (!label || !selectedChild) return;
-
-    const { db: next } = addChildActivityForShiftDB({
-      db,
-      shiftId: shift.id,
-      parentActivityId: selectedChild.activityId,
-      label,
-    });
-
-    setDB(next);
-    setNewTaskName("");
+    setShiftNote("");
   };
 
   return (
     <>
-      <NavBar active="board" onDashboardClick={onBack} />
+      <NavBar active="execution" onDashboardClick={onDashboardClick} />
 
-      <main className="main dashboard-layout">
-        <section className="card">
-          <div className="row">
+      <main className={`main dashboard-layout ${theme.pageClass}`}>
+        <section className="card" style={theme.accentStyle}>
+          <div className="row" style={{ alignItems: "flex-start", gap: 16 }}>
             <div>
-              <h1 className="card-title">Ausführungsboard</h1>
-              <p className="card-subtitle">
-                {SHIFT_LABEL[shift.shiftType]} · {dateLabel} · CWID{" "}
-                {shift.operator} · {shift.line}
+              <div className={`theme-badge ${theme.badgeClass}`}>{selectedMode}</div>
+              <h1 className="card-title" style={{ color: "inherit", marginTop: 10 }}>
+                Execution Board
+              </h1>
+              <p className="card-subtitle" style={{ color: "rgba(255,255,255,0.92)" }}>
+                {shift.operator} · {shift.line} · {shift.shiftType} · {shift.date}
               </p>
             </div>
 
-            <div className="spacer" />
-
-            <button className="btn-ghost" onClick={onBack}>
-              ← Zurück
-            </button>
+            <div className="row" style={{ marginLeft: "auto", gap: 12, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={onBackToShifts}
+                style={{
+                  background: "rgba(255,255,255,0.14)",
+                  color: "#fff",
+                  border: "1px solid rgba(255,255,255,0.24)",
+                }}
+              >
+                Zurück
+              </button>
+            </div>
           </div>
         </section>
 
-        <section className="grid grid-3">
-          <article className="kpi-card">
-            <div className="kpi-label">Gesamtaufgaben</div>
-            <div className="kpi-value">{totalLeafTasks}</div>
-          </article>
+        <section className="card">
+          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+            {(["Primary", "Secondary"] as BoardMode[]).map((mode) => {
+              const exists = boardRoots.some(
+                (entry) => normalizeBoardMode(entry.nameSnapshot) === mode
+              );
 
-          <article className="kpi-card">
-            <div className="kpi-label">Erledigt</div>
-            <div className="kpi-value">{doneCount}</div>
-          </article>
-
-          <article className="kpi-card">
-            <div className="kpi-label">Offen / Blockiert / Übersprungen</div>
-            <div className="kpi-value">
-              {Math.max(
-                totalLeafTasks - doneCount - blockedCount - skippedCount,
-                0
-              )}{" "}
-              / {blockedCount} / {skippedCount}
-            </div>
-          </article>
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  className={selectedMode === mode ? "btn-primary" : "btn-secondary"}
+                  onClick={() => setSelectedMode(mode)}
+                  disabled={!exists}
+                  style={
+                    selectedMode === mode ? theme.accentStyle : undefined
+                  }
+                >
+                  {mode}
+                </button>
+              );
+            })}
+          </div>
         </section>
 
-        <section className="dashboard-grid" style={parentThemeStyle}>
-          <article className="card contextual-card">
-            <h2 className="card-title">Bereiche</h2>
-            <p className="card-subtitle">
-              Wähle Primär oder Sekundär als Hauptbereich.
-            </p>
+        {!selectedRoot ? (
+          <section className="card empty">
+            Kein Top Parent für {selectedMode} gefunden. Lege im DB einen Root-Eintrag
+            mit dem Namen Primary oder Secondary an.
+          </section>
+        ) : (
+          <section className="dashboard-grid">
+            <article className="card">
+              <div className="row">
+                <div>
+                  <h2 className="card-title">Workflow</h2>
+                  <p className="card-subtitle">
+                    Aufgaben aus dem DB für {selectedMode}
+                  </p>
+                </div>
+              </div>
 
-            <div className="parent-list">
-              {topLevelParents.map((parent) => {
-                const isSecondary = parent.nameSnapshot === "Sekundär";
+              <div className="task-group-list">
+                {levelTwoGroups.length === 0 ? (
+                  <div className="card empty">
+                    Keine Gruppen unter {selectedMode} gefunden.
+                  </div>
+                ) : (
+                  levelTwoGroups.map((group) => {
+                    const tasks = getChildren(group.id);
 
-                const pillStyle = {
-                  ["--pill-accent" as string]: isSecondary ? "#89D329" : "#00BCFF",
-                  ["--pill-accent-soft" as string]: isSecondary
-                    ? "rgba(137, 211, 41, 0.14)"
-                    : "rgba(0, 188, 255, 0.14)",
-                  ["--pill-accent-border" as string]: isSecondary
-                    ? "rgba(137, 211, 41, 0.42)"
-                    : "rgba(0, 188, 255, 0.42)",
-                } as React.CSSProperties;
+                    return (
+                      <section
+                        key={group.id}
+                        className="card"
+                        style={{ ...theme.softStyle, marginBottom: 16 }}
+                      >
+                        <div className="row">
+                          <div>
+                            <h3 className="card-title" style={{ marginBottom: 4 }}>
+                              {group.nameSnapshot}
+                            </h3>
+                            <p className="card-subtitle">
+                              {tasks.length} Aufgabe{tasks.length === 1 ? "" : "n"}
+                            </p>
+                          </div>
+                        </div>
 
-                return (
-                  <button
-                    key={parent.id}
-                    type="button"
-                    style={pillStyle}
-                    className={`parent-pill contextual-pill ${
-                      selectedParentId === parent.id ? "parent-pill--active" : ""
-                    }`}
-                    onClick={() => {
-                      setSelectedParentId(parent.id);
-                      setSelectedChildId(null);
-                    }}
+                        {tasks.length === 0 ? (
+                          <div className="card empty">
+                            Keine Aufgaben in dieser Gruppe.
+                          </div>
+                        ) : (
+                          <div className="task-list">
+                            {tasks.map((task) => {
+                              const latest = getLatestTaskEvent(shift, task.id);
+                              const history = getTaskEventsForActivity(shift, task.id);
+                              const draft = noteDrafts[task.id] ?? "";
+
+                              return (
+                                <article key={task.id} className="task-row">
+                                  <div className="task-main">
+                                    <div className="task-title-row">
+                                      <h4 className="task-title">{task.nameSnapshot}</h4>
+                                      {latest ? (
+                                        <span
+                                          className={`status-pill ${statusClass(
+                                            latest.status
+                                          )}`}
+                                        >
+                                          {statusLabel(latest.status)}
+                                        </span>
+                                      ) : (
+                                        <span className="status-pill">Offen</span>
+                                      )}
+                                    </div>
+
+                                    <div className="task-meta">
+                                      {latest ? (
+                                        <>
+                                          Letzter Eintrag: {formatDateTime(latest.timestamp)}
+                                          {latest.note ? ` · ${latest.note}` : ""}
+                                        </>
+                                      ) : (
+                                        <>Noch keine Zeitstempel.</>
+                                      )}
+                                    </div>
+
+                                    <div
+                                      className="row"
+                                      style={{
+                                        gap: 8,
+                                        marginTop: 12,
+                                        flexWrap: "wrap",
+                                      }}
+                                    >
+                                      <button
+                                        type="button"
+                                        className="btn-primary"
+                                        onClick={() => handleTaskEvent(task.id, "done")}
+                                      >
+                                        Done
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        onClick={() => handleTaskEvent(task.id, "blocked", draft)}
+                                      >
+                                        Blocked
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        onClick={() => handleTaskEvent(task.id, "skipped", draft)}
+                                      >
+                                        Skip
+                                      </button>
+                                    </div>
+
+                                    <div style={{ marginTop: 12 }}>
+                                      <input
+                                        className="input"
+                                        type="text"
+                                        value={draft}
+                                        onChange={(e) =>
+                                          setNoteDrafts((current) => ({
+                                            ...current,
+                                            [task.id]: e.target.value,
+                                          }))
+                                        }
+                                        placeholder="Optionale Notiz"
+                                      />
+                                    </div>
+
+                                    {history.length > 0 ? (
+                                      <div style={{ marginTop: 14 }}>
+                                        <div className="task-history-title">
+                                          Zeitstempel-Historie
+                                        </div>
+                                        <div className="task-history-list">
+                                          {history.map((event) => (
+                                            <div key={event.id} className="task-history-item">
+                                              <span
+                                                className={`status-pill ${statusClass(
+                                                  event.status
+                                                )}`}
+                                              >
+                                                {statusLabel(event.status)}
+                                              </span>
+                                              <span>{formatDateTime(event.timestamp)}</span>
+                                              {event.note ? <span>· {event.note}</span> : null}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </section>
+                    );
+                  })
+                )}
+              </div>
+            </article>
+
+            <article className="card">
+              <h2 className="card-title">Schichtnotizen</h2>
+              <p className="card-subtitle">
+                Übergabe, Warnungen und Infos für diese Schicht
+              </p>
+
+              <form onSubmit={handleAddShiftNote} className="new-shift-form">
+                <div className="field">
+                  <label className="label" htmlFor="shift-note-kind">
+                    Typ
+                  </label>
+                  <select
+                    id="shift-note-kind"
+                    className="select"
+                    value={shiftNoteKind}
+                    onChange={(e) =>
+                      setShiftNoteKind(
+                        e.target.value as "handover" | "warning" | "info"
+                      )
+                    }
                   >
-                    {parent.nameSnapshot}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <h3 className="card-title" style={{ fontSize: 16 }}>
-                Neuer Unterbereich
-              </h3>
-              <p className="card-subtitle">
-                Füge einen neuen Unterbereich unter dem gewählten Hauptbereich
-                hinzu.
-              </p>
-
-              <div className="field" style={{ marginTop: 8 }}>
-                <input
-                  className="input contextual-input"
-                  type="text"
-                  value={newChildName}
-                  onChange={(event) => setNewChildName(event.target.value)}
-                  placeholder="z. B. MO Zwischenprüfung"
-                />
-              </div>
-
-              <div className="new-shift-actions" style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn-ghost contextual-ghost-btn"
-                  onClick={addFirstLevelChild}
-                  disabled={!selectedParent || !newChildName.trim()}
-                >
-                  Unterbereich anlegen
-                </button>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 16 }}>
-              <h3 className="card-title" style={{ fontSize: 16 }}>
-                {selectedParent
-                  ? selectedParent.nameSnapshot
-                  : "Kein Bereich ausgewählt"}
-              </h3>
-              <p className="card-subtitle">
-                {selectedParent
-                  ? "Wähle einen Unterbereich, um die Aufgaben zu sehen."
-                  : "Wähle links einen Hauptbereich, um weiterzuarbeiten."}
-              </p>
-
-              {selectedParent && firstLevelChildren.length > 0 ? (
-                <div className="parent-list">
-                  {firstLevelChildren.map((child) => (
-                    <button
-                      key={child.id}
-                      type="button"
-                      className={`parent-pill contextual-child-pill ${
-                        selectedChildId === child.id ? "parent-pill--active" : ""
-                      }`}
-                      onClick={() => setSelectedChildId(child.id)}
-                    >
-                      {child.nameSnapshot}
-                    </button>
-                  ))}
-                </div>
-              ) : selectedParent ? (
-                <div className="card empty">
-                  Keine Unterbereiche für diesen Bereich definiert.
-                </div>
-              ) : null}
-            </div>
-          </article>
-
-          <article className="card contextual-card">
-            <h2 className="card-title">
-              {selectedChild ? selectedChild.nameSnapshot : "Aufgaben"}
-            </h2>
-            <p className="card-subtitle">
-              {selectedChild
-                ? "Markiere Aufgaben als erledigt, blockiert oder übersprungen und ergänze Notizen."
-                : "Wähle links zuerst einen Unterbereich."}
-            </p>
-
-            {selectedChild ? (
-              <div className="task-progress-card contextual-surface">
-                <div className="task-progress-head">
-                  <span className="task-progress-title">Fortschritt</span>
-                  <span className="task-progress-value">
-                    {selectedChildStats.done} / {selectedChildStats.total} erledigt (
-                    {selectedChildStats.percent}%)
-                  </span>
+                    <option value="handover">Übergabe</option>
+                    <option value="warning">Warnung</option>
+                    <option value="info">Info</option>
+                  </select>
                 </div>
 
-                <div className="task-progress-bar">
-                  <div
-                    className="task-progress-bar-fill"
-                    style={{ width: `${selectedChildStats.percent}%` }}
+                <div className="field">
+                  <label className="label" htmlFor="shift-note-text">
+                    Notiz
+                  </label>
+                  <input
+                    id="shift-note-text"
+                    className="input"
+                    type="text"
+                    value={shiftNote}
+                    onChange={(e) => setShiftNote(e.target.value)}
+                    placeholder="Schichtnotiz eingeben"
                   />
                 </div>
 
-                <div className="task-progress-meta">
-                  <span>Offen: {selectedChildStats.open}</span>
-                  <span>Blockiert: {selectedChildStats.blocked}</span>
-                  <span>Übersprungen: {selectedChildStats.skipped}</span>
+                <div className="new-shift-actions">
+                  <button type="submit" className="btn-primary">
+                    Notiz speichern
+                  </button>
                 </div>
-              </div>
-            ) : null}
+              </form>
 
-            <div style={{ marginBottom: 12 }}>
-              <h3 className="card-title" style={{ fontSize: 16 }}>
-                Neue Aufgabe
-              </h3>
-              <p className="card-subtitle">
-                Füge eine neue Aufgabe unter dem gewählten Unterbereich hinzu.
-              </p>
-
-              <div className="field" style={{ marginTop: 8 }}>
-                <input
-                  className="input contextual-input"
-                  type="text"
-                  value={newTaskName}
-                  onChange={(event) => setNewTaskName(event.target.value)}
-                  placeholder="z. B. Leerblister-Kontrolle"
-                  disabled={!selectedChild}
-                />
-              </div>
-
-              <div className="new-shift-actions" style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn-ghost contextual-ghost-btn"
-                  onClick={addSecondLevelTask}
-                  disabled={!selectedChild || !newTaskName.trim()}
-                >
-                  Aufgabe anlegen
-                </button>
-              </div>
-            </div>
-
-            {selectedChildId === null ? (
-              <div className="card empty">Noch kein Unterbereich ausgewählt.</div>
-            ) : visibleTasks.length === 0 ? (
-              <div className="card empty">
-                Keine Aufgaben für diesen Unterbereich definiert.
-              </div>
-            ) : (
-              <div className="shift-list">
-                {visibleTasks.map((task) => {
-                  const completion = completionsByShiftActivityId.get(task.id);
-
-                  return (
-                    <div
-                      key={task.id}
-                      className="shift-card task-card contextual-task-card"
-                    >
-                      <div className="shift-meta task-meta">
-                        <div className="task-topline">
-                          <div className="shift-date">{task.nameSnapshot}</div>
-
-                          <div
-                            className={`status-badge ${
-                              completion ? `status-${completion.status}` : "status-open"
-                            }`}
-                          >
-                            {completion ? statusLabel(completion.status) : "Offen"}
-                          </div>
+              <div style={{ marginTop: 20 }}>
+                {shift.notes.length === 0 ? (
+                  <div className="card empty">Noch keine Notizen vorhanden.</div>
+                ) : (
+                  <div className="task-history-list">
+                    {[...shift.notes]
+                      .sort((a, b) => b.createdAt - a.createdAt)
+                      .map((note) => (
+                        <div key={note.id} className="task-history-item">
+                          <span className="status-pill">{note.kind}</span>
+                          <span>{formatDateTime(note.createdAt)}</span>
+                          <span>· {note.text}</span>
                         </div>
-
-                        <div className="shift-sub">
-                          {completion
-                            ? `Zuletzt geändert: ${formatTimestamp(
-                                completion.timestamp
-                              )}`
-                            : "Noch offen"}
-                        </div>
-
-                        <div className="task-actions">
-                          <button
-                            type="button"
-                            className={`btn-primary task-status-btn ${
-                              completion?.status === "done" ? "is-active" : ""
-                            }`}
-                            onClick={() => saveStatus(task, "done")}
-                          >
-                            {completion?.status === "done"
-                              ? "Erledigt zurücksetzen"
-                              : "Erledigt"}
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`btn-ghost task-status-btn contextual-ghost-btn ${
-                              completion?.status === "blocked"
-                                ? "is-active is-blocked"
-                                : ""
-                            }`}
-                            onClick={() => saveStatus(task, "blocked")}
-                          >
-                            {completion?.status === "blocked"
-                              ? "Blockiert zurücksetzen"
-                              : "Blockiert"}
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`btn-ghost task-status-btn contextual-ghost-btn ${
-                              completion?.status === "skipped"
-                                ? "is-active is-skipped"
-                                : ""
-                            }`}
-                            onClick={() => saveStatus(task, "skipped")}
-                          >
-                            {completion?.status === "skipped"
-                              ? "Übersprungen zurücksetzen"
-                              : "Übersprungen"}
-                          </button>
-                        </div>
-
-                        <div className="field task-note-field">
-                          <label className="label" htmlFor={`task-note-${task.id}`}>
-                            Aufgabennotiz
-                          </label>
-
-                          <textarea
-                            id={`task-note-${task.id}`}
-                            className="input textarea task-note-textarea contextual-input"
-                            rows={3}
-                            value={taskNoteDrafts[task.id] ?? ""}
-                            onChange={(event) =>
-                              setTaskNoteDrafts((prev) => ({
-                                ...prev,
-                                [task.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Grund für Blockierung, Beobachtung, Übergabehinweis ..."
-                          />
-                        </div>
-
-                        <div className="task-note-actions">
-                          <button
-                            type="button"
-                            className="btn-ghost contextual-ghost-btn"
-                            onClick={() => saveTaskNote(task)}
-                          >
-                            Notiz speichern
-                          </button>
-
-                          <button
-                            type="button"
-                            className="btn-ghost contextual-ghost-btn"
-                            onClick={() => clearTaskNote(task)}
-                          >
-                            Notiz leeren
-                          </button>
-                        </div>
-
-                        {completion?.note ? (
-                          <div className="task-note-preview contextual-surface">
-                            Gespeicherte Notiz: {completion.note}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </article>
-        </section>
-
-        <section className="card">
-          <h2 className="card-title">Übergabe & Meldungen</h2>
-          <p className="card-subtitle">
-            Notizen für die nächste Schicht, Hinweise oder Warnungen.
-          </p>
-
-          <div className="field">
-            <label className="label" htmlFor="shift-note">
-              Neue Notiz
-            </label>
-
-            <textarea
-              id="shift-note"
-              className="input textarea"
-              value={noteText}
-              onChange={(event) => setNoteText(event.target.value)}
-              rows={4}
-              placeholder="Zum Beispiel: Material knapp, Kamera geprüft, Linie wartet auf Freigabe ..."
-            />
-          </div>
-
-          <div className="parent-list" style={{ marginTop: 12 }}>
-            <button
-              type="button"
-              className="btn-primary"
-              onClick={() => addShiftNote("handover")}
-            >
-              Als Übergabe speichern
-            </button>
-
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => addShiftNote("warning")}
-            >
-              Als Warnung speichern
-            </button>
-
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => addShiftNote("info")}
-            >
-              Als Info speichern
-            </button>
-          </div>
-
-          <div className="shift-list" style={{ marginTop: 16 }}>
-            {shift.notes.length === 0 ? (
-              <div className="card empty">
-                Noch keine Übergaben oder Meldungen erfasst.
-              </div>
-            ) : (
-              [...shift.notes]
-                .sort((a, b) => b.createdAt - a.createdAt)
-                .map((note) => (
-                  <div
-                    key={note.id}
-                    className={`shift-card note-card note-${note.kind}`}
-                  >
-                    <div className="shift-meta">
-                      <div className="shift-date">
-                        {note.kind === "handover"
-                          ? "Übergabe"
-                          : note.kind === "warning"
-                          ? "Warnung"
-                          : "Info"}
-                      </div>
-
-                      <div className="shift-sub">
-                        {formatTimestamp(note.createdAt)}
-                      </div>
-
-                      <div className="shift-sub">{note.text}</div>
-                    </div>
+                      ))}
                   </div>
-                ))
-            )}
-          </div>
-        </section>
+                )}
+              </div>
+            </article>
+          </section>
+        )}
       </main>
     </>
   );
