@@ -418,9 +418,10 @@ button:disabled {
 
 .parent-pill--active {
   border-color: rgba(34, 211, 238, 0.7);
-  background: linear-gradient(135deg, var(--cyan), var(--cyan-2));
+  background: linear-gradient(135deg, var(--context-accent), var(--context-accent-strong));
   color: #03111c;
   font-weight: 800;
+  box-shadow: 0 10px 22px var(--context-accent-shadow);
 }
 
 .contextual-card {
@@ -453,28 +454,7 @@ button:disabled {
   background: var(--context-accent-soft);
 }
 
-.contextual-pill {
-  --pill-accent: var(--context-accent);
-  --pill-accent-soft: var(--context-accent-soft);
-  --pill-accent-border: var(--context-accent-border);
-}
-
-.contextual-pill.parent-pill {
-  border-color: var(--pill-accent-border);
-}
-
-.parent-pill--active.contextual-pill,
-.parent-pill--active.contextual-child-pill {
-  border-color: var(--context-accent-border);
-  background: linear-gradient(
-    135deg,
-    var(--context-accent),
-    var(--context-accent-strong)
-  );
-  color: #03111c;
-  box-shadow: 0 10px 22px var(--context-accent-shadow);
-}
-
+.contextual-pill.parent-pill,
 .contextual-child-pill.parent-pill {
   border-color: var(--context-accent-border);
 }
@@ -490,8 +470,7 @@ button:disabled {
 .task-progress-head,
 .task-progress-meta,
 .task-topline,
-.task-actions,
-.task-note-actions {
+.task-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -611,11 +590,6 @@ button:disabled {
   min-height: 88px;
 }
 
-.task-note-actions {
-  margin-top: 8px;
-  justify-content: flex-start;
-}
-
 .task-note-preview {
   margin-top: 8px;
   padding: 10px 12px;
@@ -650,8 +624,7 @@ button:disabled {
   .task-progress-head,
   .task-progress-meta,
   .task-topline,
-  .task-actions,
-  .task-note-actions {
+  .task-actions {
     align-items: flex-start;
   }
 }
