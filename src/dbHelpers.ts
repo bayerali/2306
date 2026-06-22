@@ -7,7 +7,6 @@ import type {
   ShiftNoteKind,
   TaskEvent,
 } from "./types";
-import { newId } from "./storage";
 
 export function requireShift(db: DB, shiftId: number): Shift {
   const shift = db.shifts.find((entry) => entry.id === shiftId);
@@ -32,8 +31,7 @@ export function getLatestTaskEvent(
   shift: Shift,
   shiftActivityId: number
 ): TaskEvent | null {
-  const events = getTaskEventsForActivity(shift, shiftActivityId);
-  return events.length > 0 ? events[0] : null;
+  return getTaskEventsForActivity(shift, shiftActivityId)[0] ?? null;
 }
 
 export function addTaskEventDB(
@@ -43,15 +41,7 @@ export function addTaskEventDB(
   status: CompletionStatus,
   note = ""
 ): DB {
-  const next: DB = {
-    ...db,
-    nextId: db.nextId,
-    shifts: [...db.shifts],
-  };
-
-  const id = newId(next);
-  next.nextId = id + 1;
-
+  const id = db.nextId;
   const event: TaskEvent = {
     id,
     shiftActivityId,
@@ -61,16 +51,43 @@ export function addTaskEventDB(
     imageData: null,
   };
 
-  next.shifts = next.shifts.map((shift) =>
-    shift.id === shiftId
-      ? {
-          ...shift,
-          taskEvents: [...shift.taskEvents, event],
-        }
-      : shift
-  );
+  return {
+    ...db,
+    nextId: id + 1,
+    shifts: db.shifts.map((shift) =>
+      shift.id === shiftId
+        ? {
+            ...shift,
+            taskEvents: [...shift.taskEvents, event],
+          }
+        : shift
+    ),
+  };
+}
 
-  return next;
+export function removeAutoParentDoneEventDB(
+  db: DB,
+  shiftId: number,
+  shiftActivityId: number
+): DB {
+  return {
+    ...db,
+    shifts: db.shifts.map((shift) =>
+      shift.id === shiftId
+        ? {
+            ...shift,
+            taskEvents: shift.taskEvents.filter(
+              (event) =>
+                !(
+                  event.shiftActivityId === shiftActivityId &&
+                  event.status === "done" &&
+                  event.note === "__AUTO_PARENT_DONE__"
+                )
+            ),
+          }
+        : shift
+    ),
+  };
 }
 
 export function addShiftNoteDB(
@@ -82,29 +99,28 @@ export function addShiftNoteDB(
   const trimmed = text.trim();
   if (!trimmed) return db;
 
-  const next: DB = {
+  const id = db.nextId;
+
+  return {
     ...db,
-    nextId: db.nextId,
+    nextId: id + 1,
     shifts: db.shifts.map((shift) =>
-      shift.id === shiftId ? { ...shift, notes: [...shift.notes] } : shift
+      shift.id === shiftId
+        ? {
+            ...shift,
+            notes: [
+              ...shift.notes,
+              {
+                id,
+                text: trimmed,
+                createdAt: Date.now(),
+                kind,
+              },
+            ],
+          }
+        : shift
     ),
   };
-
-  const id = newId(next);
-  const createdAt = Date.now();
-
-  next.nextId = id + 1;
-
-  next.shifts = next.shifts.map((shift) =>
-    shift.id === shiftId
-      ? {
-          ...shift,
-          notes: [...shift.notes, { id, text: trimmed, kind, createdAt }],
-        }
-      : shift
-  );
-
-  return next;
 }
 
 export function addChildActivityForShiftDB(options: {
@@ -120,75 +136,60 @@ export function addChildActivityForShiftDB(options: {
     return { db, newShiftActivity: null };
   }
 
-  const parentActivity = db.activities.find(
-    (activity) => activity.id === parentActivityId
-  );
+  const parentActivity = db.activities.find((activity) => activity.id === parentActivityId);
 
   if (!parentActivity) {
-    console.warn("addChildActivityForShiftDB: parent activity not found", {
-      parentActivityId,
-    });
     return { db, newShiftActivity: null };
   }
 
-  const next: DB = {
-    ...db,
-    nextId: db.nextId,
-    activities: [...db.activities],
-    shifts: db.shifts.map((shift) => ({
-      ...shift,
-      shiftActivities: [...shift.shiftActivities],
-      taskEvents: [...shift.taskEvents],
-    })),
-  };
+  const siblings = db.activities.filter((activity) => activity.parentId === parentActivityId);
+  const sortOrder =
+    siblings.length > 0 ? Math.max(...siblings.map((entry) => entry.sortOrder)) + 1 : 0;
 
-  const siblings = next.activities.filter(
-    (activity) => activity.parentId === parentActivityId
-  );
+  const newActivityId = db.nextId;
+  const newShiftActivityId = db.nextId + 1;
 
-  const nextSort =
-    siblings.length > 0
-      ? Math.max(...siblings.map((entry) => entry.sortOrder)) + 1
-      : 0;
-
-  const newActivityId = newId(next);
-  next.nextId = newActivityId + 1;
-
-  const newActivity: Activity = {
+  const activity: Activity = {
     id: newActivityId,
     name: trimmed,
     color: parentActivity.color,
-    sortOrder: nextSort,
+    sortOrder,
     parentId: parentActivityId,
     archived: false,
   };
 
-  next.activities.push(newActivity);
-
-  const shiftIndex = next.shifts.findIndex((shift) => shift.id === shiftId);
-
-  if (shiftIndex === -1) {
-    console.warn("addChildActivityForShiftDB: shift not found", { shiftId });
+  const shift = db.shifts.find((entry) => entry.id === shiftId);
+  if (!shift) {
     return { db, newShiftActivity: null };
   }
 
-  const parentShiftActivity = next.shifts[shiftIndex].shiftActivities.find(
+  const parentShiftActivity = shift.shiftActivities.find(
     (entry) => entry.activityId === parentActivityId
   );
-
-  const newShiftActivityId = newId(next);
-  next.nextId = newShiftActivityId + 1;
 
   const newShiftActivity: ShiftActivity = {
     id: newShiftActivityId,
     activityId: newActivityId,
-    nameSnapshot: newActivity.name,
-    colorSnapshot: newActivity.color,
-    parentIdSnapshot: parentShiftActivity ? parentShiftActivity.id : null,
-    sortOrderSnapshot: newActivity.sortOrder,
+    nameSnapshot: activity.name,
+    colorSnapshot: activity.color,
+    parentIdSnapshot: parentShiftActivity?.id ?? null,
+    sortOrderSnapshot: activity.sortOrder,
   };
 
-  next.shifts[shiftIndex].shiftActivities.push(newShiftActivity);
-
-  return { db: next, newShiftActivity };
+  return {
+    db: {
+      ...db,
+      nextId: db.nextId + 2,
+      activities: [...db.activities, activity],
+      shifts: db.shifts.map((entry) =>
+        entry.id === shiftId
+          ? {
+              ...entry,
+              shiftActivities: [...entry.shiftActivities, newShiftActivity],
+            }
+          : entry
+      ),
+    },
+    newShiftActivity,
+  };
 }
