@@ -290,6 +290,10 @@ export function addChildActivityForShiftDB(options: {
     return { db, newShiftActivity: null };
   }
 
+  const parentShiftActivity = next.shifts[shiftIndex].shiftActivities.find(
+    (entry) => entry.activityId === parentActivityId
+  );
+
   const newShiftActivityId = newId(next);
   next.nextId = newShiftActivityId + 1;
 
@@ -298,7 +302,7 @@ export function addChildActivityForShiftDB(options: {
     activityId: newActivityId,
     nameSnapshot: newActivity.name,
     colorSnapshot: newActivity.color,
-    parentIdSnapshot: newActivity.parentId,
+    parentIdSnapshot: parentShiftActivity ? parentShiftActivity.id : null,
     sortOrderSnapshot: newActivity.sortOrder,
   };
 
