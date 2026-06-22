@@ -18,11 +18,11 @@ window.__SEED_DB__ = {
   version: 3,
   nextId: 700,
   activities: [
-    { id: 1, name: "Primary", color: "blue", sortOrder: 0, parentId: null },
-    { id: 2, name: "Secondary", color: "green", sortOrder: 1, parentId: null },
+    { id: 1, name: "Primär", color: "blue", sortOrder: 0, parentId: null },
+    { id: 2, name: "Sekundär", color: "green", sortOrder: 1, parentId: null },
 
-    { id: 3, name: "MO Start", color: "blue", sortOrder: 0, parentId: 1 },
-    { id: 4, name: "MO Ende", color: "blue", sortOrder: 1, parentId: 1 },
+    { id: 3, name: "MO Start", color: "green", sortOrder: 0, parentId: 1 },
+    { id: 4, name: "MO Ende", color: "red", sortOrder: 1, parentId: 1 },
 
     { id: 5, name: "Abnahme", color: "blue", sortOrder: 0, parentId: 3 },
     { id: 6, name: "SFA IDE", color: "orange", sortOrder: 1, parentId: 3 },
@@ -42,13 +42,8 @@ window.__SEED_DB__ = {
     { id: 19, name: "ZP Wanne auswiegen", color: "purple", sortOrder: 7, parentId: 4 },
     { id: 20, name: "Pas X Bearbeitung", color: "green", sortOrder: 8, parentId: 4 },
 
-    { id: 21, name: "Linie vorbereiten", color: "green", sortOrder: 0, parentId: 2 },
-    { id: 22, name: "Materialkontrolle", color: "green", sortOrder: 1, parentId: 2 },
-
-    { id: 23, name: "Checkliste Sekundär", color: "teal", sortOrder: 0, parentId: 21 },
-    { id: 24, name: "Freigabe Sekundär", color: "orange", sortOrder: 1, parentId: 21 },
-    { id: 25, name: "Material zählen", color: "green", sortOrder: 0, parentId: 22 },
-    { id: 26, name: "Bestand dokumentieren", color: "blue", sortOrder: 1, parentId: 22 }
+    { id: 21, name: "Sekundär Aufgabe 1", color: "teal", sortOrder: 0, parentId: 2 },
+    { id: 22, name: "Sekundär Aufgabe 2", color: "orange", sortOrder: 1, parentId: 2 },
   ],
   shifts: [
     {
@@ -59,11 +54,11 @@ window.__SEED_DB__ = {
       operator: "AB1234",
       createdAt,
       shiftActivities: [
-        { id: 201, activityId: 1, nameSnapshot: "Primary", colorSnapshot: "blue", parentIdSnapshot: null, sortOrderSnapshot: 0 },
-        { id: 202, activityId: 2, nameSnapshot: "Secondary", colorSnapshot: "green", parentIdSnapshot: null, sortOrderSnapshot: 1 },
+        { id: 201, activityId: 1, nameSnapshot: "Primär", colorSnapshot: "blue", parentIdSnapshot: null, sortOrderSnapshot: 0 },
+        { id: 202, activityId: 2, nameSnapshot: "Sekundär", colorSnapshot: "green", parentIdSnapshot: null, sortOrderSnapshot: 1 },
 
-        { id: 203, activityId: 3, nameSnapshot: "MO Start", colorSnapshot: "blue", parentIdSnapshot: 201, sortOrderSnapshot: 0 },
-        { id: 204, activityId: 4, nameSnapshot: "MO Ende", colorSnapshot: "blue", parentIdSnapshot: 201, sortOrderSnapshot: 1 },
+        { id: 203, activityId: 3, nameSnapshot: "MO Start", colorSnapshot: "green", parentIdSnapshot: 201, sortOrderSnapshot: 0 },
+        { id: 204, activityId: 4, nameSnapshot: "MO Ende", colorSnapshot: "red", parentIdSnapshot: 201, sortOrderSnapshot: 1 },
 
         { id: 205, activityId: 5, nameSnapshot: "Abnahme", colorSnapshot: "blue", parentIdSnapshot: 203, sortOrderSnapshot: 0 },
         { id: 206, activityId: 6, nameSnapshot: "SFA IDE", colorSnapshot: "orange", parentIdSnapshot: 203, sortOrderSnapshot: 1 },
@@ -83,13 +78,8 @@ window.__SEED_DB__ = {
         { id: 219, activityId: 19, nameSnapshot: "ZP Wanne auswiegen", colorSnapshot: "purple", parentIdSnapshot: 204, sortOrderSnapshot: 7 },
         { id: 220, activityId: 20, nameSnapshot: "Pas X Bearbeitung", colorSnapshot: "green", parentIdSnapshot: 204, sortOrderSnapshot: 8 },
 
-        { id: 221, activityId: 21, nameSnapshot: "Linie vorbereiten", colorSnapshot: "green", parentIdSnapshot: 202, sortOrderSnapshot: 0 },
-        { id: 222, activityId: 22, nameSnapshot: "Materialkontrolle", colorSnapshot: "green", parentIdSnapshot: 202, sortOrderSnapshot: 1 },
-
-        { id: 223, activityId: 23, nameSnapshot: "Checkliste Sekundär", colorSnapshot: "teal", parentIdSnapshot: 221, sortOrderSnapshot: 0 },
-        { id: 224, activityId: 24, nameSnapshot: "Freigabe Sekundär", colorSnapshot: "orange", parentIdSnapshot: 221, sortOrderSnapshot: 1 },
-        { id: 225, activityId: 25, nameSnapshot: "Material zählen", colorSnapshot: "green", parentIdSnapshot: 222, sortOrderSnapshot: 0 },
-        { id: 226, activityId: 26, nameSnapshot: "Bestand dokumentieren", colorSnapshot: "blue", parentIdSnapshot: 222, sortOrderSnapshot: 1 }
+        { id: 221, activityId: 21, nameSnapshot: "Sekundär Aufgabe 1", colorSnapshot: "teal", parentIdSnapshot: 202, sortOrderSnapshot: 0 },
+        { id: 222, activityId: 22, nameSnapshot: "Sekundär Aufgabe 2", colorSnapshot: "orange", parentIdSnapshot: 202, sortOrderSnapshot: 1 }
       ],
       taskEvents: [
         {
@@ -102,14 +92,6 @@ window.__SEED_DB__ = {
         },
         {
           id: 302,
-          shiftActivityId: 205,
-          status: "done",
-          timestamp: createdAt - 1000 * 60 * 20,
-          note: "Erneut bestätigt",
-          imageData: null
-        },
-        {
-          id: 303,
           shiftActivityId: 206,
           status: "blocked",
           timestamp: createdAt - 1000 * 60 * 30,
@@ -117,23 +99,7 @@ window.__SEED_DB__ = {
           imageData: null
         },
         {
-          id: 304,
-          shiftActivityId: 223,
-          status: "done",
-          timestamp: createdAt - 1000 * 60 * 25,
-          note: "Sekundärcheck erledigt",
-          imageData: null
-        },
-        {
-          id: 305,
-          shiftActivityId: 225,
-          status: "done",
-          timestamp: createdAt - 1000 * 60 * 12,
-          note: "Material gezählt",
-          imageData: null
-        },
-        {
-          id: 306,
+          id: 303,
           shiftActivityId: 207,
           status: "skipped",
           timestamp: createdAt - 1000 * 60 * 18,
