@@ -78,6 +78,7 @@ function migrateDB(input: unknown): DB {
     version?: unknown;
     shifts?: Array<
       Partial<Shift> & {
+        taskEvents?: unknown;
         completions?: Array<{
           id?: unknown;
           shiftActivityId?: unknown;
@@ -117,7 +118,7 @@ function migrateDB(input: unknown): DB {
         createdAt: Number(shift.createdAt ?? Date.now()),
         shiftActivities: migrateShiftActivities(shift.shiftActivities),
         taskEvents: migrateTaskEvents(
-          (shift as Partial<Shift>).taskEvents,
+          (shift as Partial<Shift> & { taskEvents?: unknown }).taskEvents,
           shift.completions
         ),
         notes: migrateNotes(shift.notes),
