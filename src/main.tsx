@@ -15,13 +15,15 @@ const date = now.toISOString().slice(0, 10);
 const createdAt = Date.now();
 
 window.__SEED_DB__ = {
-  version: 2,
-  nextId: 500,
+  version: 3,
+  nextId: 700,
   activities: [
-    { id: 1, name: "Primär", color: "blue", sortOrder: 0, parentId: null },
-    { id: 2, name: "Sekundär", color: "green", sortOrder: 1, parentId: null },
-    { id: 3, name: "MO Start", color: "green", sortOrder: 0, parentId: 1 },
-    { id: 4, name: "MO Ende", color: "red", sortOrder: 1, parentId: 1 },
+    { id: 1, name: "Primary", color: "blue", sortOrder: 0, parentId: null },
+    { id: 2, name: "Secondary", color: "green", sortOrder: 1, parentId: null },
+
+    { id: 3, name: "MO Start", color: "blue", sortOrder: 0, parentId: 1 },
+    { id: 4, name: "MO Ende", color: "blue", sortOrder: 1, parentId: 1 },
+
     { id: 5, name: "Abnahme", color: "blue", sortOrder: 0, parentId: 3 },
     { id: 6, name: "SFA IDE", color: "orange", sortOrder: 1, parentId: 3 },
     { id: 7, name: "IDE vor Start", color: "purple", sortOrder: 2, parentId: 3 },
@@ -29,6 +31,7 @@ window.__SEED_DB__ = {
     { id: 9, name: "Leer Blister Prüfung", color: "blue", sortOrder: 4, parentId: 3 },
     { id: 10, name: "Kamera Test", color: "orange", sortOrder: 5, parentId: 3 },
     { id: 11, name: "ZP Zufuhr auf", color: "purple", sortOrder: 6, parentId: 3 },
+
     { id: 12, name: "ZP Zuführung schließen", color: "red", sortOrder: 0, parentId: 4 },
     { id: 13, name: "Blister Strang leerfahren", color: "orange", sortOrder: 1, parentId: 4 },
     { id: 14, name: "Blister Maschine stoppen", color: "red", sortOrder: 2, parentId: 4 },
@@ -38,8 +41,14 @@ window.__SEED_DB__ = {
     { id: 18, name: "OR+UR, MO-Data-Report, Linienkennzeichnung zum Vorarbeiter", color: "blue", sortOrder: 6, parentId: 4 },
     { id: 19, name: "ZP Wanne auswiegen", color: "purple", sortOrder: 7, parentId: 4 },
     { id: 20, name: "Pas X Bearbeitung", color: "green", sortOrder: 8, parentId: 4 },
-    { id: 21, name: "Sekundär Aufgabe 1", color: "teal", sortOrder: 0, parentId: 2 },
-    { id: 22, name: "Sekundär Aufgabe 2", color: "orange", sortOrder: 1, parentId: 2 }
+
+    { id: 21, name: "Linie vorbereiten", color: "green", sortOrder: 0, parentId: 2 },
+    { id: 22, name: "Materialkontrolle", color: "green", sortOrder: 1, parentId: 2 },
+
+    { id: 23, name: "Checkliste Sekundär", color: "teal", sortOrder: 0, parentId: 21 },
+    { id: 24, name: "Freigabe Sekundär", color: "orange", sortOrder: 1, parentId: 21 },
+    { id: 25, name: "Material zählen", color: "green", sortOrder: 0, parentId: 22 },
+    { id: 26, name: "Bestand dokumentieren", color: "blue", sortOrder: 1, parentId: 22 }
   ],
   shifts: [
     {
@@ -50,10 +59,12 @@ window.__SEED_DB__ = {
       operator: "AB1234",
       createdAt,
       shiftActivities: [
-        { id: 201, activityId: 1, nameSnapshot: "Primär", colorSnapshot: "green", parentIdSnapshot: null, sortOrderSnapshot: 0 },
-        { id: 202, activityId: 2, nameSnapshot: "Sekundär", colorSnapshot: "blue", parentIdSnapshot: null, sortOrderSnapshot: 1 },
-        { id: 203, activityId: 3, nameSnapshot: "MO Start", colorSnapshot: "green", parentIdSnapshot: 201, sortOrderSnapshot: 0 },
-        { id: 204, activityId: 4, nameSnapshot: "MO Ende", colorSnapshot: "red", parentIdSnapshot: 201, sortOrderSnapshot: 1 },
+        { id: 201, activityId: 1, nameSnapshot: "Primary", colorSnapshot: "blue", parentIdSnapshot: null, sortOrderSnapshot: 0 },
+        { id: 202, activityId: 2, nameSnapshot: "Secondary", colorSnapshot: "green", parentIdSnapshot: null, sortOrderSnapshot: 1 },
+
+        { id: 203, activityId: 3, nameSnapshot: "MO Start", colorSnapshot: "blue", parentIdSnapshot: 201, sortOrderSnapshot: 0 },
+        { id: 204, activityId: 4, nameSnapshot: "MO Ende", colorSnapshot: "blue", parentIdSnapshot: 201, sortOrderSnapshot: 1 },
+
         { id: 205, activityId: 5, nameSnapshot: "Abnahme", colorSnapshot: "blue", parentIdSnapshot: 203, sortOrderSnapshot: 0 },
         { id: 206, activityId: 6, nameSnapshot: "SFA IDE", colorSnapshot: "orange", parentIdSnapshot: 203, sortOrderSnapshot: 1 },
         { id: 207, activityId: 7, nameSnapshot: "IDE vor Start", colorSnapshot: "purple", parentIdSnapshot: 203, sortOrderSnapshot: 2 },
@@ -61,15 +72,26 @@ window.__SEED_DB__ = {
         { id: 209, activityId: 9, nameSnapshot: "Leer Blister Prüfung", colorSnapshot: "blue", parentIdSnapshot: 203, sortOrderSnapshot: 4 },
         { id: 210, activityId: 10, nameSnapshot: "Kamera Test", colorSnapshot: "orange", parentIdSnapshot: 203, sortOrderSnapshot: 5 },
         { id: 211, activityId: 11, nameSnapshot: "ZP Zufuhr auf", colorSnapshot: "purple", parentIdSnapshot: 203, sortOrderSnapshot: 6 },
+
         { id: 212, activityId: 12, nameSnapshot: "ZP Zuführung schließen", colorSnapshot: "red", parentIdSnapshot: 204, sortOrderSnapshot: 0 },
         { id: 213, activityId: 13, nameSnapshot: "Blister Strang leerfahren", colorSnapshot: "orange", parentIdSnapshot: 204, sortOrderSnapshot: 1 },
         { id: 214, activityId: 14, nameSnapshot: "Blister Maschine stoppen", colorSnapshot: "red", parentIdSnapshot: 204, sortOrderSnapshot: 2 },
         { id: 215, activityId: 15, nameSnapshot: "Saugband hochfahren und entleeren", colorSnapshot: "orange", parentIdSnapshot: 204, sortOrderSnapshot: 3 },
         { id: 216, activityId: 16, nameSnapshot: "Chargeblöcke ausbauen", colorSnapshot: "purple", parentIdSnapshot: 204, sortOrderSnapshot: 4 },
-        { id: 217, activityId: 21, nameSnapshot: "Sekundär Aufgabe 1", colorSnapshot: "teal", parentIdSnapshot: 202, sortOrderSnapshot: 0 },
-        { id: 218, activityId: 22, nameSnapshot: "Sekundär Aufgabe 2", colorSnapshot: "orange", parentIdSnapshot: 202, sortOrderSnapshot: 1 }
+        { id: 217, activityId: 17, nameSnapshot: "OR + UR ausmessen, Restmenge auf Beleg", colorSnapshot: "blue", parentIdSnapshot: 204, sortOrderSnapshot: 5 },
+        { id: 218, activityId: 18, nameSnapshot: "OR+UR, MO-Data-Report, Linienkennzeichnung zum Vorarbeiter", colorSnapshot: "blue", parentIdSnapshot: 204, sortOrderSnapshot: 6 },
+        { id: 219, activityId: 19, nameSnapshot: "ZP Wanne auswiegen", colorSnapshot: "purple", parentIdSnapshot: 204, sortOrderSnapshot: 7 },
+        { id: 220, activityId: 20, nameSnapshot: "Pas X Bearbeitung", colorSnapshot: "green", parentIdSnapshot: 204, sortOrderSnapshot: 8 },
+
+        { id: 221, activityId: 21, nameSnapshot: "Linie vorbereiten", colorSnapshot: "green", parentIdSnapshot: 202, sortOrderSnapshot: 0 },
+        { id: 222, activityId: 22, nameSnapshot: "Materialkontrolle", colorSnapshot: "green", parentIdSnapshot: 202, sortOrderSnapshot: 1 },
+
+        { id: 223, activityId: 23, nameSnapshot: "Checkliste Sekundär", colorSnapshot: "teal", parentIdSnapshot: 221, sortOrderSnapshot: 0 },
+        { id: 224, activityId: 24, nameSnapshot: "Freigabe Sekundär", colorSnapshot: "orange", parentIdSnapshot: 221, sortOrderSnapshot: 1 },
+        { id: 225, activityId: 25, nameSnapshot: "Material zählen", colorSnapshot: "green", parentIdSnapshot: 222, sortOrderSnapshot: 0 },
+        { id: 226, activityId: 26, nameSnapshot: "Bestand dokumentieren", colorSnapshot: "blue", parentIdSnapshot: 222, sortOrderSnapshot: 1 }
       ],
-      completions: [
+      taskEvents: [
         {
           id: 301,
           shiftActivityId: 205,
@@ -80,6 +102,14 @@ window.__SEED_DB__ = {
         },
         {
           id: 302,
+          shiftActivityId: 205,
+          status: "done",
+          timestamp: createdAt - 1000 * 60 * 20,
+          note: "Erneut bestätigt",
+          imageData: null
+        },
+        {
+          id: 303,
           shiftActivityId: 206,
           status: "blocked",
           timestamp: createdAt - 1000 * 60 * 30,
@@ -87,7 +117,23 @@ window.__SEED_DB__ = {
           imageData: null
         },
         {
-          id: 303,
+          id: 304,
+          shiftActivityId: 223,
+          status: "done",
+          timestamp: createdAt - 1000 * 60 * 25,
+          note: "Sekundärcheck erledigt",
+          imageData: null
+        },
+        {
+          id: 305,
+          shiftActivityId: 225,
+          status: "done",
+          timestamp: createdAt - 1000 * 60 * 12,
+          note: "Material gezählt",
+          imageData: null
+        },
+        {
+          id: 306,
           shiftActivityId: 207,
           status: "skipped",
           timestamp: createdAt - 1000 * 60 * 18,
@@ -124,7 +170,7 @@ window.__SEED_DB__ = {
       operator: "CD5678",
       createdAt: createdAt - 1000 * 60 * 60 * 8,
       shiftActivities: [],
-      completions: [],
+      taskEvents: [],
       notes: []
     },
     {
@@ -135,7 +181,7 @@ window.__SEED_DB__ = {
       operator: "EF9012",
       createdAt: createdAt - 1000 * 60 * 60 * 16,
       shiftActivities: [],
-      completions: [],
+      taskEvents: [],
       notes: []
     }
   ]
