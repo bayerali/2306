@@ -72,12 +72,8 @@ export function ShiftsPage({
 
     setFormError("");
 
-    const next: DB = {
-      ...db,
-      shifts: [...db.shifts],
-    };
-
-    const sortedActivities = next.activities
+    const sortedActivities = db.activities
+      .filter((activity) => !activity.archived)
       .slice()
       .sort((a, b) => {
         if (a.parentId === b.parentId) return a.sortOrder - b.sortOrder;
@@ -86,19 +82,26 @@ export function ShiftsPage({
         return a.sortOrder - b.sortOrder;
       });
 
+    let nextIdValue = db.nextId;
+    const takeId = () => {
+      const id = nextIdValue;
+      nextIdValue += 1;
+      return id;
+    };
+
     const activityIdToShiftActivityId = new Map<number, number>();
 
-    const shiftActivities: ShiftActivity[] = sortedActivities.map((act) => {
-      const shiftActivityId = newId(next);
-      activityIdToShiftActivityId.set(act.id, shiftActivityId);
+    const shiftActivities: ShiftActivity[] = sortedActivities.map((activity) => {
+      const shiftActivityId = takeId();
+      activityIdToShiftActivityId.set(activity.id, shiftActivityId);
 
       return {
         id: shiftActivityId,
-        activityId: act.id,
-        nameSnapshot: act.name,
-        colorSnapshot: act.color,
+        activityId: activity.id,
+        nameSnapshot: activity.name,
+        colorSnapshot: activity.color,
         parentIdSnapshot: null,
-        sortOrderSnapshot: act.sortOrder,
+        sortOrderSnapshot: activity.sortOrder,
       };
     });
 
@@ -115,10 +118,10 @@ export function ShiftsPage({
           : activityIdToShiftActivityId.get(sourceActivity.parentId) ?? null;
     }
 
-    const id = newId(next);
+    const shiftId = takeId();
 
     const shift: Shift = {
-      id,
+      id: shiftId,
       date,
       shiftType,
       line,
@@ -129,10 +132,15 @@ export function ShiftsPage({
       notes: [],
     };
 
-    next.shifts = [shift, ...next.shifts];
+    const next: DB = {
+      ...db,
+      nextId: nextIdValue,
+      shifts: [shift, ...db.shifts],
+    };
+
     setDB(next);
     setOperator("");
-    setFormError("");
+    onOpenShiftBoard(shiftId);
   };
 
   const deleteShift = (id: number, e: React.MouseEvent) => {
@@ -174,8 +182,7 @@ export function ShiftsPage({
           <article className="card">
             <h1 className="card-title">Neue Schicht starten</h1>
             <p className="card-subtitle">
-              Erstelle eine neue Schicht. Die Schicht bleibt nach dem Anlegen in
-              der Übersicht und kann rechts geöffnet werden.
+              Erstelle eine neue Schicht und öffne direkt das Ausführungsboard.
             </p>
 
             <form className="new-shift-form" onSubmit={startShift}>
@@ -248,7 +255,7 @@ export function ShiftsPage({
 
               <div className="new-shift-actions">
                 <button type="submit" className="btn-primary start-btn">
-                  Schicht starten
+                  Schicht starten →
                 </button>
               </div>
             </form>
