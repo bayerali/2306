@@ -286,11 +286,11 @@ function normalizeNoteKind(value: unknown): Shift["notes"][number]["kind"] {
 
 function defaultDB(): DB {
   const acts: Activity[] = [
-    { id: 1, name: "Primary", color: "blue", sortOrder: 0, parentId: null },
-    { id: 2, name: "Secondary", color: "green", sortOrder: 1, parentId: null },
+    { id: 1, name: "Primär", color: "blue", sortOrder: 0, parentId: null },
+    { id: 2, name: "Sekundär", color: "green", sortOrder: 1, parentId: null },
 
-    { id: 3, name: "MO Start", color: "blue", sortOrder: 0, parentId: 1 },
-    { id: 4, name: "MO Ende", color: "blue", sortOrder: 1, parentId: 1 },
+    { id: 3, name: "MO Start", color: "green", sortOrder: 0, parentId: 1 },
+    { id: 4, name: "MO Ende", color: "red", sortOrder: 1, parentId: 1 },
 
     { id: 5, name: "Abnahme", color: "blue", sortOrder: 0, parentId: 3 },
     { id: 6, name: "SFA IDE", color: "orange", sortOrder: 1, parentId: 3 },
@@ -310,12 +310,8 @@ function defaultDB(): DB {
     { id: 19, name: "ZP Wanne auswiegen", color: "purple", sortOrder: 7, parentId: 4 },
     { id: 20, name: "Pas X Bearbeitung", color: "green", sortOrder: 8, parentId: 4 },
 
-    { id: 21, name: "Linie vorbereiten", color: "green", sortOrder: 0, parentId: 2 },
-    { id: 22, name: "Materialkontrolle", color: "green", sortOrder: 1, parentId: 2 },
-    { id: 23, name: "Checkliste Sekundär", color: "teal", sortOrder: 0, parentId: 21 },
-    { id: 24, name: "Freigabe Sekundär", color: "orange", sortOrder: 1, parentId: 21 },
-    { id: 25, name: "Material zählen", color: "green", sortOrder: 0, parentId: 22 },
-    { id: 26, name: "Bestand dokumentieren", color: "blue", sortOrder: 1, parentId: 22 },
+    { id: 21, name: "Sekundär Aufgabe 1", color: "teal", sortOrder: 0, parentId: 2 },
+    { id: 22, name: "Sekundär Aufgabe 2", color: "orange", sortOrder: 1, parentId: 2 },
   ];
 
   return {
