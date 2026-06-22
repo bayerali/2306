@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import type { DB, Line, Shift, ShiftActivity, ShiftType } from "../types";
-import { newId } from "../storage";
 import { NavBar } from "./NavBar";
 
 const SHIFT_LABEL: Record<ShiftType, string> = {
@@ -83,6 +82,7 @@ export function ShiftsPage({
       });
 
     let nextIdValue = db.nextId;
+
     const takeId = () => {
       const id = nextIdValue;
       nextIdValue += 1;
@@ -148,12 +148,10 @@ export function ShiftsPage({
 
     if (!window.confirm("Diese Schicht wirklich löschen?")) return;
 
-    const next: DB = {
+    setDB({
       ...db,
       shifts: db.shifts.filter((s) => s.id !== id),
-    };
-
-    setDB(next);
+    });
   };
 
   return (
