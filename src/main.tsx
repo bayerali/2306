@@ -56,10 +56,8 @@ window.__SEED_DB__ = {
       shiftActivities: [
         { id: 201, activityId: 1, nameSnapshot: "Primär", colorSnapshot: "blue", parentIdSnapshot: null, sortOrderSnapshot: 0 },
         { id: 202, activityId: 2, nameSnapshot: "Sekundär", colorSnapshot: "green", parentIdSnapshot: null, sortOrderSnapshot: 1 },
-
         { id: 203, activityId: 3, nameSnapshot: "MO Start", colorSnapshot: "green", parentIdSnapshot: 201, sortOrderSnapshot: 0 },
         { id: 204, activityId: 4, nameSnapshot: "MO Ende", colorSnapshot: "red", parentIdSnapshot: 201, sortOrderSnapshot: 1 },
-
         { id: 205, activityId: 5, nameSnapshot: "Abnahme", colorSnapshot: "blue", parentIdSnapshot: 203, sortOrderSnapshot: 0 },
         { id: 206, activityId: 6, nameSnapshot: "SFA IDE", colorSnapshot: "orange", parentIdSnapshot: 203, sortOrderSnapshot: 1 },
         { id: 207, activityId: 7, nameSnapshot: "IDE vor Start", colorSnapshot: "purple", parentIdSnapshot: 203, sortOrderSnapshot: 2 },
@@ -81,72 +79,6 @@ window.__SEED_DB__ = {
         { id: 221, activityId: 21, nameSnapshot: "Sekundär Aufgabe 1", colorSnapshot: "teal", parentIdSnapshot: 202, sortOrderSnapshot: 0 },
         { id: 222, activityId: 22, nameSnapshot: "Sekundär Aufgabe 2", colorSnapshot: "orange", parentIdSnapshot: 202, sortOrderSnapshot: 1 }
       ],
-      taskEvents: [
-        {
-          id: 301,
-          shiftActivityId: 205,
-          status: "done",
-          timestamp: createdAt - 1000 * 60 * 45,
-          note: "",
-          imageData: null
-        },
-        {
-          id: 302,
-          shiftActivityId: 206,
-          status: "blocked",
-          timestamp: createdAt - 1000 * 60 * 30,
-          note: "Warten auf Freigabe durch Vorarbeiter",
-          imageData: null
-        },
-        {
-          id: 303,
-          shiftActivityId: 207,
-          status: "skipped",
-          timestamp: createdAt - 1000 * 60 * 18,
-          note: "",
-          imageData: null
-        }
-      ],
-      notes: [
-        {
-          id: 401,
-          text: "Materialbestand prüfen, wird knapp.",
-          kind: "handover",
-          createdAt: createdAt - 1000 * 60 * 20
-        },
-        {
-          id: 402,
-          text: "Kamera-Test heute verzögert gestartet.",
-          kind: "warning",
-          createdAt: createdAt - 1000 * 60 * 10
-        },
-        {
-          id: 403,
-          text: "Linie läuft stabil seit 06:40.",
-          kind: "info",
-          createdAt: createdAt - 1000 * 60 * 5
-        }
-      ]
-    },
-    {
-      id: 102,
-      date,
-      shiftType: "Spaet",
-      line: "SVP05",
-      operator: "CD5678",
-      createdAt: createdAt - 1000 * 60 * 60 * 8,
-      shiftActivities: [],
-      taskEvents: [],
-      notes: []
-    },
-    {
-      id: 103,
-      date,
-      shiftType: "Nacht",
-      line: "SVP06",
-      operator: "EF9012",
-      createdAt: createdAt - 1000 * 60 * 60 * 16,
-      shiftActivities: [],
       taskEvents: [],
       notes: []
     }
