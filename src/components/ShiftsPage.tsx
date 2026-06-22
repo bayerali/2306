@@ -77,22 +77,43 @@ export function ShiftsPage({
       shifts: [...db.shifts],
     };
 
-    const shiftActivities: ShiftActivity[] = next.activities
+    const sortedActivities = next.activities
       .slice()
       .sort((a, b) => {
         if (a.parentId === b.parentId) return a.sortOrder - b.sortOrder;
         if (a.parentId === null) return -1;
         if (b.parentId === null) return 1;
         return a.sortOrder - b.sortOrder;
-      })
-      .map((act) => ({
-        id: newId(next),
+      });
+
+    const activityIdToShiftActivityId = new Map<number, number>();
+
+    const shiftActivities: ShiftActivity[] = sortedActivities.map((act) => {
+      const shiftActivityId = newId(next);
+      activityIdToShiftActivityId.set(act.id, shiftActivityId);
+
+      return {
+        id: shiftActivityId,
         activityId: act.id,
         nameSnapshot: act.name,
         colorSnapshot: act.color,
-        parentIdSnapshot: act.parentId,
+        parentIdSnapshot: null,
         sortOrderSnapshot: act.sortOrder,
-      }));
+      };
+    });
+
+    for (const shiftActivity of shiftActivities) {
+      const sourceActivity = sortedActivities.find(
+        (activity) => activity.id === shiftActivity.activityId
+      );
+
+      if (!sourceActivity) continue;
+
+      shiftActivity.parentIdSnapshot =
+        sourceActivity.parentId === null
+          ? null
+          : activityIdToShiftActivityId.get(sourceActivity.parentId) ?? null;
+    }
 
     const id = newId(next);
 
