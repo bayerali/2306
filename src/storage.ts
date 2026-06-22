@@ -1,12 +1,13 @@
 import type {
   Activity,
-  Completion,
+  CompletionStatus,
   DB,
   Shift,
   ShiftActivity,
+  TaskEvent,
 } from "./types";
 
-const STORAGE_KEY = "produktions-dashboard-db-v2";
+const STORAGE_KEY = "produktions-dashboard-db-v3";
 
 declare global {
   interface Window {
@@ -24,6 +25,16 @@ export function loadDB(): DB {
 
     if (raw) {
       return migrateDB(JSON.parse(raw));
+    }
+
+    const legacyRaw = window.localStorage.getItem(
+      "produktions-dashboard-db-v2"
+    );
+
+    if (legacyRaw) {
+      const db = migrateDB(JSON.parse(legacyRaw));
+      saveDB(db);
+      return db;
     }
 
     const seeded = window.__SEED_DB__;
@@ -69,7 +80,19 @@ export function resetDB(): DB {
 
 function migrateDB(input: unknown): DB {
   const raw = (input ?? {}) as Partial<DB> & {
-    shifts?: Array<Partial<Shift>>;
+    version?: unknown;
+    shifts?: Array<
+      Partial<Shift> & {
+        completions?: Array<{
+          id?: unknown;
+          shiftActivityId?: unknown;
+          status?: unknown;
+          timestamp?: unknown;
+          note?: unknown;
+          imageData?: unknown;
+        }>;
+      }
+    >;
     activities?: Array<Partial<Activity>>;
   };
 
@@ -98,7 +121,7 @@ function migrateDB(input: unknown): DB {
         operator: String(shift.operator ?? ""),
         createdAt: Number(shift.createdAt ?? Date.now()),
         shiftActivities: migrateShiftActivities(shift.shiftActivities),
-        completions: migrateCompletions(shift.completions),
+        taskEvents: migrateTaskEvents(shift.taskEvents, shift.completions),
         notes: migrateNotes(shift.notes),
       }))
     : [];
@@ -111,12 +134,12 @@ function migrateDB(input: unknown): DB {
           ...activities.map((a) => a.id),
           ...shifts.map((s) => s.id),
           ...shifts.flatMap((s) => s.shiftActivities.map((a) => a.id)),
-          ...shifts.flatMap((s) => s.completions.map((c) => c.id)),
+          ...shifts.flatMap((s) => s.taskEvents.map((e) => e.id)),
           ...shifts.flatMap((s) => s.notes.map((n) => n.id))
         ) + 1;
 
   return {
-    version: 2,
+    version: 3,
     nextId,
     activities,
     shifts,
@@ -143,24 +166,52 @@ function migrateShiftActivities(input: unknown): ShiftActivity[] {
   });
 }
 
-function migrateCompletions(input: unknown): Completion[] {
-  if (!Array.isArray(input)) return [];
+function migrateTaskEvents(
+  taskEventsInput: unknown,
+  completionsInput?: unknown
+): TaskEvent[] {
+  if (Array.isArray(taskEventsInput)) {
+    return taskEventsInput.map((item, index) => {
+      const event = item as Partial<TaskEvent> & {
+        status?: unknown;
+        note?: unknown;
+      };
 
-  return input.map((item, index) => {
-    const c = item as Partial<Completion> & {
-      status?: unknown;
-      note?: unknown;
-    };
+      return {
+        id: Number(event.id ?? index + 1),
+        shiftActivityId: Number(event.shiftActivityId ?? 0),
+        status: normalizeStatus(event.status),
+        timestamp: Number(event.timestamp ?? Date.now()),
+        note: String(event.note ?? ""),
+        imageData: typeof event.imageData === "string" ? event.imageData : null,
+      };
+    });
+  }
 
-    return {
-      id: Number(c.id ?? index + 1),
-      shiftActivityId: Number(c.shiftActivityId ?? 0),
-      status: normalizeStatus(c.status),
-      timestamp: Number(c.timestamp ?? Date.now()),
-      note: String(c.note ?? ""),
-      imageData: typeof c.imageData === "string" ? c.imageData : null,
-    };
-  });
+  if (Array.isArray(completionsInput)) {
+    return completionsInput.map((item, index) => {
+      const completion = item as {
+        id?: unknown;
+        shiftActivityId?: unknown;
+        status?: unknown;
+        timestamp?: unknown;
+        note?: unknown;
+        imageData?: unknown;
+      };
+
+      return {
+        id: Number(completion.id ?? index + 1),
+        shiftActivityId: Number(completion.shiftActivityId ?? 0),
+        status: normalizeStatus(completion.status),
+        timestamp: Number(completion.timestamp ?? Date.now()),
+        note: String(completion.note ?? ""),
+        imageData:
+          typeof completion.imageData === "string" ? completion.imageData : null,
+      };
+    });
+  }
+
+  return [];
 }
 
 function migrateNotes(input: unknown): Shift["notes"] {
@@ -215,7 +266,7 @@ function normalizeLine(value: unknown): Shift["line"] {
   }
 }
 
-function normalizeStatus(value: unknown): Completion["status"] {
+function normalizeStatus(value: unknown): CompletionStatus {
   switch (value) {
     case "done":
     case "blocked":
@@ -239,11 +290,11 @@ function normalizeNoteKind(value: unknown): Shift["notes"][number]["kind"] {
 
 function defaultDB(): DB {
   const acts: Activity[] = [
-    { id: 1, name: "Primär", color: "blue", sortOrder: 0, parentId: null },
-    { id: 2, name: "Sekundär", color: "green", sortOrder: 1, parentId: null },
+    { id: 1, name: "Primary", color: "blue", sortOrder: 0, parentId: null },
+    { id: 2, name: "Secondary", color: "green", sortOrder: 1, parentId: null },
 
-    { id: 3, name: "MO Start", color: "green", sortOrder: 0, parentId: 1 },
-    { id: 4, name: "MO Ende", color: "red", sortOrder: 1, parentId: 1 },
+    { id: 3, name: "MO Start", color: "blue", sortOrder: 0, parentId: 1 },
+    { id: 4, name: "MO Ende", color: "blue", sortOrder: 1, parentId: 1 },
 
     { id: 5, name: "Abnahme", color: "blue", sortOrder: 0, parentId: 3 },
     { id: 6, name: "SFA IDE", color: "orange", sortOrder: 1, parentId: 3 },
@@ -263,12 +314,16 @@ function defaultDB(): DB {
     { id: 19, name: "ZP Wanne auswiegen", color: "purple", sortOrder: 7, parentId: 4 },
     { id: 20, name: "Pas X Bearbeitung", color: "green", sortOrder: 8, parentId: 4 },
 
-    { id: 21, name: "Sekundär Aufgabe 1", color: "teal", sortOrder: 0, parentId: 2 },
-    { id: 22, name: "Sekundär Aufgabe 2", color: "orange", sortOrder: 1, parentId: 2 },
+    { id: 21, name: "Linie vorbereiten", color: "green", sortOrder: 0, parentId: 2 },
+    { id: 22, name: "Materialkontrolle", color: "green", sortOrder: 1, parentId: 2 },
+    { id: 23, name: "Checkliste Sekundär", color: "teal", sortOrder: 0, parentId: 21 },
+    { id: 24, name: "Freigabe Sekundär", color: "orange", sortOrder: 1, parentId: 21 },
+    { id: 25, name: "Material zählen", color: "green", sortOrder: 0, parentId: 22 },
+    { id: 26, name: "Bestand dokumentieren", color: "blue", sortOrder: 1, parentId: 22 },
   ];
 
   return {
-    version: 2,
+    version: 3,
     nextId: acts.length + 1,
     activities: acts,
     shifts: [],
