@@ -138,22 +138,15 @@ export function ExecutionBoardPage({
     "handover"
   );
 
-  if (!shift) {
-    return (
-      <>
-        <NavBar active="board" onDashboardClick={onDashboardClick} />
-        <main className="main dashboard-layout">
-          <article className="card empty">Schicht nicht gefunden.</article>
-        </main>
-      </>
-    );
-  }
+  const shiftActivities = shift?.shiftActivities ?? [];
+  const shiftNotes = shift?.notes ?? [];
+  const shiftTaskEvents = shift?.taskEvents ?? [];
 
   const topLevelParents = useMemo(() => {
     return sortActivities(
-      shift.shiftActivities.filter((activity) => activity.parentIdSnapshot === null)
+      shiftActivities.filter((activity) => activity.parentIdSnapshot === null)
     );
-  }, [shift.shiftActivities]);
+  }, [shiftActivities]);
 
   useEffect(() => {
     const availableModes = topLevelParents
@@ -174,11 +167,11 @@ export function ExecutionBoardPage({
     if (!selectedRoot) return [];
 
     return sortActivities(
-      shift.shiftActivities.filter(
+      shiftActivities.filter(
         (activity) => activity.parentIdSnapshot === selectedRoot.id
       )
     );
-  }, [shift.shiftActivities, selectedRoot]);
+  }, [shiftActivities, selectedRoot]);
 
   useEffect(() => {
     if (parentGroups.length === 0) {
@@ -199,20 +192,22 @@ export function ExecutionBoardPage({
     if (!selectedParent) return [];
 
     return sortActivities(
-      shift.shiftActivities.filter(
+      shiftActivities.filter(
         (activity) => activity.parentIdSnapshot === selectedParent.id
       )
     );
-  }, [shift.shiftActivities, selectedParent]);
+  }, [shiftActivities, selectedParent]);
 
   const latestEventByShiftActivityId = useMemo(() => {
+    if (!shift) return new Map<number, TaskEvent | null>();
+
     return new Map(
-      shift.shiftActivities.map((activity) => [
+      shiftActivities.map((activity) => [
         activity.id,
         getLatestTaskEvent(shift, activity.id),
       ])
     );
-  }, [shift]);
+  }, [shift, shiftActivities]);
 
   useEffect(() => {
     setTaskNoteDrafts((prev) => {
@@ -230,7 +225,7 @@ export function ExecutionBoardPage({
   }, [visibleTasks, latestEventByShiftActivityId]);
 
   useEffect(() => {
-    if (!selectedParent) return;
+    if (!shift || !selectedParent) return;
     if (!/^MO Start$|^MO Ende$/i.test(selectedParent.nameSnapshot)) return;
     if (visibleTasks.length === 0) return;
 
@@ -260,7 +255,7 @@ export function ExecutionBoardPage({
       return;
     }
 
-    const hasAutoDone = shift.taskEvents.some(
+    const hasAutoDone = shiftTaskEvents.some(
       (event) =>
         event.shiftActivityId === selectedParent.id &&
         event.status === "done" &&
@@ -270,24 +265,34 @@ export function ExecutionBoardPage({
     if (hasAutoDone) {
       setDB(removeAutoParentDoneEventDB(db, shift.id, selectedParent.id));
     }
-  }, [db, setDB, selectedParent, shift, visibleTasks, latestEventByShiftActivityId]);
+  }, [
+    db,
+    setDB,
+    shift,
+    selectedParent,
+    visibleTasks,
+    latestEventByShiftActivityId,
+    shiftTaskEvents,
+  ]);
 
-  const dateLabel = formatDate(shift.date);
+  const dateLabel = shift ? formatDate(shift.date) : "";
   const boardThemeStyle = getBoardTheme(selectedMode);
 
   const parentIds = new Set(
-    shift.shiftActivities
+    shiftActivities
       .map((activity) => activity.parentIdSnapshot)
       .filter((value): value is number => value !== null)
   );
 
-  const totalLeafTasks = shift.shiftActivities.filter(
+  const totalLeafTasks = shiftActivities.filter(
     (activity) => !parentIds.has(activity.id)
   ).length;
 
-  const latestEvents = shift.shiftActivities
-    .map((activity) => getLatestTaskEvent(shift, activity.id))
-    .filter((event): event is TaskEvent => event !== null);
+  const latestEvents = shift
+    ? shiftActivities
+        .map((activity) => getLatestTaskEvent(shift, activity.id))
+        .filter((event): event is TaskEvent => event !== null)
+    : [];
 
   const doneCount = latestEvents.filter((event) => event.status === "done").length;
   const blockedCount = latestEvents.filter(
@@ -319,18 +324,32 @@ export function ExecutionBoardPage({
   }, [visibleTasks, latestEventByShiftActivityId]);
 
   const saveStatus = (activity: ShiftActivity, status: TaskEvent["status"]) => {
+    if (!shift) return;
     const note = (taskNoteDrafts[activity.id] ?? "").trim();
     setDB(addTaskEventDB(db, shift.id, activity.id, status, note));
   };
 
   const addShiftNote = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!shift) return;
+
     const next = addShiftNoteDB(db, shift.id, noteText, noteKind);
     if (next !== db) {
       setDB(next);
       setNoteText("");
     }
   };
+
+  if (!shift) {
+    return (
+      <>
+        <NavBar active="board" onDashboardClick={onDashboardClick} />
+        <main className="main dashboard-layout">
+          <article className="card empty">Schicht nicht gefunden.</article>
+        </main>
+      </>
+    );
+  }
 
   return (
     <>
@@ -409,9 +428,7 @@ export function ExecutionBoardPage({
               <h3 className="card-title" style={{ fontSize: 16 }}>
                 Elternpunkte
               </h3>
-              <p className="card-subtitle">
-                Wähle MO Start oder MO Ende.
-              </p>
+              <p className="card-subtitle">Wähle MO Start oder MO Ende.</p>
 
               {parentGroups.length === 0 ? (
                 <div className="card empty">Keine Elternpunkte gefunden.</div>
@@ -635,12 +652,12 @@ export function ExecutionBoardPage({
           </form>
 
           <div className="shift-list" style={{ marginTop: 16 }}>
-            {shift.notes.length === 0 ? (
+            {shiftNotes.length === 0 ? (
               <div className="card empty">
                 Noch keine Übergaben oder Meldungen erfasst.
               </div>
             ) : (
-              [...shift.notes]
+              [...shiftNotes]
                 .sort((a, b) => b.createdAt - a.createdAt)
                 .map((note) => (
                   <div
