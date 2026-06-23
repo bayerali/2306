@@ -628,3 +628,8 @@ button:disabled {
     align-items: flex-start;
   }
 }
+.nav-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
